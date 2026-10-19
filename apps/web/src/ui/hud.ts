@@ -23,6 +23,8 @@ export function createHud(onSpeed: (speed: Speed) => void): Hud {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = LABELS[s];
+    // czytnik ekranu nie przeczyta "❚❚" jako pauzy, a title nie nadaje nazwy przyciskowi z tekstem
+    if (s === 0) b.setAttribute("aria-label", "Pauza");
     b.title = s === 0 ? "Pauza" : `Tempo ${String(s)}×`;
     b.addEventListener("click", () => {
       onSpeed(s);
