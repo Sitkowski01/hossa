@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "optimize": "node dist/optimize.js ../../blender/.cache/makieta-surowa.glb ../../apps/web/public/makieta.glb",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",
