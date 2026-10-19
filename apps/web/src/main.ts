@@ -1,4 +1,4 @@
-import { SPEEDS, type FromWorker, type Snapshot, type Speed, type ToWorker } from "./sim/protocol.js";
+import type { FromWorker, Snapshot, ToWorker } from "./sim/protocol.js";
 import { dayFraction, extrapolate } from "./sim/clock.js";
 import { loadModel } from "./scene/model.js";
 import { createPickets } from "./scene/pickets.js";
@@ -11,23 +11,15 @@ import { createTickers } from "./scene/tickers.js";
 import { createTrucks } from "./scene/trucks.js";
 import { createHud } from "./ui/hud.js";
 import { daylight, hourOf } from "./world/daylight.js";
+import { readParams } from "./world/params.js";
 
-/**
- * Parametry z adresu: ?seed=42 (ta sama sesja za kazdym razem), ?tempo=4,
- * ?godzina=12 (zatrzymana pora dnia — do zrzutow ekranu), ?kamera=x,y,z,celX,celY,celZ.
- */
-const params = new URLSearchParams(location.search);
-const seed = Number(params.get("seed") ?? Math.floor(Math.random() * 1e6));
-const speedParam = Number(params.get("tempo") ?? 1);
-const speed: Speed = SPEEDS.find((s) => s === speedParam) ?? 1;
-const fixedHour = params.has("godzina") ? Number(params.get("godzina")) : undefined;
-const view = params.get("kamera")?.split(",").map(Number);
+const { seed, speed, hour: fixedHour, camera: view } = readParams(location.search);
 
 const canvas = document.getElementById("scena") as HTMLCanvasElement;
 const stage = createStage(canvas);
 const sky = createSky(stage.renderer, stage.scene);
-if (view?.length === 6 && view.every(Number.isFinite)) {
-  const [x, y, z, tx, ty, tz] = view as [number, number, number, number, number, number];
+if (view) {
+  const [x, y, z, tx, ty, tz] = view;
   stage.camera.position.set(x, y, z);
   stage.controls.target.set(tx, ty, tz);
 }
