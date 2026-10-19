@@ -34,7 +34,7 @@ describe("readParams", () => {
     expect(readParams(`?godzina=${hour}`, random)).not.toHaveProperty("hour");
   });
 
-  it.each(["1,2,3", "1,2,3,4,5,x", "1,2,3,4,5,6,7"])("kamera %j bez szesciu liczb jest pomijana", (view) => {
+  it.each(["1,2,3", "1,2,3,4,5,x", "1,2,3,4,5,6,7", ",,,,,", "10,,5,0,0,0"])("kamera %j bez szesciu liczb jest pomijana", (view) => {
     expect(readParams(`?kamera=${view}`, random)).not.toHaveProperty("camera");
   });
 

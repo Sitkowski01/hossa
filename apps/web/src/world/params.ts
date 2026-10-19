@@ -26,7 +26,7 @@ export function readParams(search: string, random: () => number = Math.random): 
   const speed = SPEEDS.find((s) => String(s) === q.get("tempo")) ?? 1;
   const hourValue = numberOf(q.get("godzina"));
   const hour = hourValue >= 0 && hourValue < 24 ? hourValue : undefined;
-  const view = q.get("kamera")?.split(",").map(Number);
+  const view = q.get("kamera")?.split(",").map(numberOf);
   const camera = view?.length === 6 && view.every(Number.isFinite) ? (view as unknown as Params["camera"]) : undefined;
   return { seed, speed, ...(hour === undefined ? {} : { hour }), ...(camera ? { camera } : {}) };
 }

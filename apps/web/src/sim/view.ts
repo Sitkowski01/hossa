@@ -6,6 +6,9 @@ import type { CompanyView, Dispatch, Headline, Incident, Route, Snapshot, Yards 
 
 const NEWS_KEPT = 8;
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+/** Port mierzy place ladunkiem jednego statku (wysylki z kilku dni). */
+const PORT_STEEL = TECH.truckSteel * TECH.shipEvery;
+const PORT_MACHINES = TECH.machineCapacity * TECH.shipEvery;
 
 /** Zapelnienie placow wzgledem ich pojemnosci; port mierzy ladunkiem jednego statku. */
 export function yards(stocks: Stocks, factoryOutput: number): Yards {
@@ -13,9 +16,18 @@ export function yards(stocks: Stocks, factoryOutput: number): Yards {
     mine: clamp01(stocks.mineOre / TECH.mineYard),
     millOre: clamp01(stocks.millOre / TECH.millOreYard),
     factory: clamp01(factoryOutput),
-    portSteel: clamp01(stocks.portSteel / (TECH.truckSteel * TECH.shipEvery)),
-    portMachines: clamp01(stocks.portMachines / (TECH.machineCapacity * TECH.shipEvery)),
+    portSteel: clamp01(stocks.portSteel / PORT_STEEL),
+    portMachines: clamp01(stocks.portMachines / PORT_MACHINES),
   };
+}
+
+/**
+ * W dniu zaladunku gospodarka oproznia port juz w kroku dnia, zanim powstanie pierwsza migawka.
+ * Makieta pokazuje wtedy na placach to, co statek zabiera — dzwigi przenosza to rano.
+ */
+export function loadingDay(y: Yards, loaded: { readonly steel: number; readonly machines: number } | null): Yards {
+  if (!loaded) return y;
+  return { ...y, portSteel: clamp01(loaded.steel / PORT_STEEL), portMachines: clamp01(loaded.machines / PORT_MACHINES) };
 }
 
 const tone = (impacts: Partial<Record<Ticker, number>>): number => {
@@ -78,7 +90,7 @@ export class Observer {
       indexOpen: session.indexHistory.at(-1) ?? 1000,
       companies,
       dispatches,
-      yards: yards(economy.stocks, companies.MTK.output),
+      yards: loadingDay(yards(economy.stocks, companies.MTK.output), report.ship),
       ship: this.ship,
       incidents,
       news,

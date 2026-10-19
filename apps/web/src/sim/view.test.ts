@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { ShipPhase } from "../world/traffic.js";
 import { SimClock } from "./clock.js";
 import type { Snapshot } from "./protocol.js";
-import { Observer, yards } from "./view.js";
+import { Observer, loadingDay, yards } from "./view.js";
 
 /** Sesja jak w workerze: zegar idzie krokami, po kazdym kroku powstaje migawka. */
 function run(seed: number, days: number, events: Record<number, EconomicEvent> = {}): Snapshot[] {
@@ -100,6 +100,9 @@ describe("Observer — sesja w toku", () => {
     const out = phases.indexOf("wyplywa");
     expect(out).toBeGreaterThanOrEqual(0);
     expect(phases[out + 1]).toBe("wraca");
+    // w dniu zaladunku na placach jest ladunek statku, choc gospodarka juz oproznila port
+    const loadDay = lastOfDay(shots, out + 1);
+    expect(loadDay.yards.portSteel + loadDay.yards.portMachines).toBeGreaterThan(0.5);
   });
 });
 
@@ -168,6 +171,18 @@ describe("Observer — zdarzenia bez spolki", () => {
     const last = shots.at(-1) as Snapshot;
     expect(last.news.find((n) => n.text.includes("utrzymuje"))?.tone).toBe(0);
     expect(last.incidents).toContainEqual({ kind: "NASTROJE", daysLeft: 5 });
+  });
+});
+
+describe("loadingDay", () => {
+  const empty = { mine: 0.4, millOre: 0.3, factory: 1, portSteel: 0, portMachines: 0 };
+
+  it("bez zaladunku zostawia place bez zmian", () => {
+    expect(loadingDay(empty, null)).toBe(empty);
+  });
+
+  it("w dniu zaladunku pokazuje w porcie to, co zabiera statek", () => {
+    expect(loadingDay(empty, { steel: 1750, machines: 2000 })).toEqual({ ...empty, portSteel: 0.5, portMachines: 1 });
   });
 });
 

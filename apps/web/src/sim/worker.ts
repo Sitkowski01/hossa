@@ -39,5 +39,6 @@ port.onmessage = (e) => {
   } else if (msg.type === "speed" && running) {
     loop(); // czas do tej chwili liczy sie jeszcze w starym tempie
     running.clock.speed = msg.speed;
+    loop(); // scena od razu dostaje nowe tempo, inaczej przez 100 ms ekstrapolowalaby po staremu
   }
 };
