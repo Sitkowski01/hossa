@@ -1,0 +1,101 @@
+import type { Ticker } from "@hossa/economy";
+import * as THREE from "three";
+import type { Snapshot } from "../sim/protocol.js";
+import { change, price } from "../world/format.js";
+import { BLOOM_THRESHOLD } from "./stage.js";
+import type { Model } from "./model.js";
+
+const TICKERS: readonly Ticker[] = ["RUD", "STW", "MTK", "BPT", "KSZ", "GRS"];
+const UP = "#2fbf71";
+const DOWN = "#e5484d";
+const FLAT = "#93a4bb";
+
+export interface Tickers {
+  update(snapshot: Snapshot, dt: number): void;
+}
+
+const tone = (pct: number): string => (pct > 0.0005 ? UP : pct < -0.0005 ? DOWN : FLAT);
+
+/**
+ * Notowania na makiecie: tabliczka z kursem nad kazda spolka (zawsze widoczna, zielona albo
+ * czerwona wzgledem otwarcia) i pas LED na fasadzie gieldy, po ktorym przewijaja sie kursy.
+ * Tekst rysowany na canvasie i odswiezany tylko wtedy, gdy zmieni sie cena.
+ */
+export function createTickers(model: Model, scene: THREE.Scene): Tickers {
+  const signs = TICKERS.map((t) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 96;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    // stala wielkosc na ekranie: tabliczka ma byc czytelna z kazdej odleglosci
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, toneMapped: false, sizeAttenuation: false }));
+    sprite.renderOrder = 10;
+    sprite.scale.set(0.1, 0.0375, 1);
+    sprite.position.copy(model.anchor(`${t}_kurs`)).add(new THREE.Vector3(0, 4, 0));
+    scene.add(sprite);
+    return { ticker: t, canvas, texture, text: "" };
+  });
+
+  const led = model.node("GIELDA_led") as THREE.Mesh;
+  const ledCanvas = document.createElement("canvas");
+  ledCanvas.width = 2048;
+  ledCanvas.height = 64;
+  const ledTexture = new THREE.CanvasTexture(ledCanvas);
+  ledTexture.colorSpace = THREE.SRGBColorSpace;
+  ledTexture.wrapS = THREE.RepeatWrapping;
+  ledTexture.flipY = false; // UV z glTF maja poczatek u gory, canvas tez — bez odwracania
+  led.material = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: ledTexture, emissiveIntensity: BLOOM_THRESHOLD * 0.9 });
+  let ledText = "";
+
+  return {
+    update(snapshot, dt) {
+      for (const s of signs) {
+        const c = snapshot.companies[s.ticker];
+        const pct = c.price / c.open - 1;
+        const text = `${s.ticker}|${price(c.price)}|${change(pct)}`;
+        if (text === s.text) continue;
+        s.text = text;
+        const g = s.canvas.getContext("2d") as CanvasRenderingContext2D;
+        g.clearRect(0, 0, 256, 96);
+        g.fillStyle = "rgba(11, 18, 32, 0.86)";
+        g.beginPath();
+        g.roundRect(4, 4, 248, 88, 14);
+        g.fill();
+        g.fillStyle = tone(pct);
+        g.fillRect(4, 80, 248, 12);
+        g.font = "600 30px 'Segoe UI', sans-serif";
+        g.fillStyle = "#e6edf6";
+        g.fillText(s.ticker, 18, 40);
+        g.fillStyle = tone(pct);
+        g.textAlign = "right";
+        g.fillText(change(pct), 238, 40);
+        g.textAlign = "left";
+        g.font = "700 30px 'Segoe UI', sans-serif";
+        g.fillStyle = "#e6edf6";
+        g.fillText(price(c.price), 18, 72);
+        s.texture.needsUpdate = true;
+      }
+
+      const line = TICKERS.map((t) => `${t} ${price(snapshot.companies[t].price)}`).join("   ·   ");
+      if (line !== ledText) {
+        ledText = line;
+        const g = ledCanvas.getContext("2d") as CanvasRenderingContext2D;
+        g.fillStyle = "#000";
+        g.fillRect(0, 0, 2048, 64);
+        g.font = "700 40px Consolas, monospace";
+        g.textBaseline = "middle";
+        let x = 20;
+        for (const t of TICKERS) {
+          const c = snapshot.companies[t];
+          g.fillStyle = tone(c.price / c.open - 1);
+          const label = `${t} ${price(c.price)}   `;
+          g.fillText(label, x, 34);
+          x += g.measureText(label).width;
+        }
+        ledTexture.needsUpdate = true;
+      }
+      ledTexture.offset.x = (ledTexture.offset.x + dt * 0.04) % 1;
+    },
+  };
+}
