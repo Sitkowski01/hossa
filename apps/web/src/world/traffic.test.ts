@@ -30,6 +30,7 @@ describe("convoy", () => {
 
   it("brak ladunku to brak ciezarowek", () => {
     expect(convoy("stal", 0, 0.3)).toEqual([]);
+    expect(departures("stal", -50)).toEqual([]);
   });
 
   it("wlasnosc: postep zawsze w 0..1, a w ciagu dnia jedzie najwyzej MAX_TRUCKS", () => {

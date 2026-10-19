@@ -1,3 +1,5 @@
+import { smoothstep } from "./smooth.js";
+
 /** Dzien gospodarki zaczyna sie o swicie — wtedy ruszaja pierwsze ciezarowki. */
 export const DAWN = 5;
 export const DUSK = 21;
@@ -19,11 +21,6 @@ export interface Daylight {
   readonly lampsOn: boolean;
 }
 
-const smooth = (a: number, b: number, x: number): number => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-
 /**
  * Slonce na niebie o danej godzinie: wschodzi na wschodzie o swicie, w poludnie stoi na poludniu
  * na 58°, zachodzi na zachodzie o zmierzchu. Noc jest krotsza niz dzien, zeby makieta
@@ -43,7 +40,7 @@ export function daylight(hour: number): Daylight {
     hour,
     elevation,
     sun: [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)],
-    day: smooth(-6, 10, elevation),
+    day: smoothstep(-6, 10, elevation),
     lampsOn: elevation < 4,
   };
 }
