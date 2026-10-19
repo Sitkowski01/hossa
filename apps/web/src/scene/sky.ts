@@ -3,12 +3,12 @@ import { Sky } from "three/addons/objects/Sky.js";
 import type { Daylight } from "../world/daylight.js";
 
 const SUN_DISTANCE = 400;
-const DAY_SUN = 2.6;
+const DAY_SUN = 3.2;
 const NIGHT_BLUE = new THREE.Color(0x0b1424);
 const FOG_DAY = new THREE.Color(0xb8c7d6);
 const FOG_STORM = new THREE.Color(0x56606b);
 
-export interface Weather {
+export interface SkyLight {
   update(light: Daylight, storm: boolean): void;
 }
 
@@ -29,7 +29,7 @@ function configure(sky: Sky, sun: THREE.Vector3, storm: boolean): void {
  * Samego nieba nie widac: jest o rzedy wielkosci jasniejsze niz makieta i rozlewaloby sie
  * w poswiacie. Tlo ma kolor mgly, jak makieta na stole w pokoju.
  */
-export function createWeather(renderer: THREE.WebGLRenderer, scene: THREE.Scene): Weather {
+export function createSky(renderer: THREE.WebGLRenderer, scene: THREE.Scene): SkyLight {
 
   const sun = new THREE.DirectionalLight(0xfff1dc, DAY_SUN);
   sun.castShadow = true;
@@ -39,9 +39,12 @@ export function createWeather(renderer: THREE.WebGLRenderer, scene: THREE.Scene)
   Object.assign(sun.shadow.camera, { left: -240, right: 240, top: 200, bottom: -200, near: 50, far: 900 });
   scene.add(sun, sun.target);
 
-  // noca miasto oswietla ksiezyc: slabe, chlodne swiatlo z gory
-  const moon = new THREE.HemisphereLight(0x8fa8d8, 0x101820, 0);
-  scene.add(moon);
+  // noca miasto oswietla ksiezyc: chlodne swiatlo z gory i slaby kierunkowy blask, zeby bryly
+  // budynkow dalo sie odroznic; makieta ma byc widoczna takze w nocy
+  const sky = new THREE.HemisphereLight(0x8fa8d8, 0x1a2230, 0);
+  const moon = new THREE.DirectionalLight(0x9db4e0, 0);
+  moon.position.set(-150, 260, -120);
+  scene.add(sky, moon);
   const fog = new THREE.Fog(FOG_DAY, 500, 1500);
   scene.fog = fog;
 
@@ -59,7 +62,8 @@ export function createWeather(renderer: THREE.WebGLRenderer, scene: THREE.Scene)
       sun.position.copy(dir).multiplyScalar(SUN_DISTANCE);
       sun.intensity = DAY_SUN * light.day * (storm ? 0.35 : 1);
       sun.visible = light.elevation > -2;
-      moon.intensity = 0.35 * (1 - light.day);
+      sky.intensity = 0.25 + 1.1 * (1 - light.day);
+      moon.intensity = 0.7 * (1 - light.day);
 
       fog.color.copy(FOG_DAY).lerp(FOG_STORM, storm ? 1 : 0).lerp(NIGHT_BLUE, 1 - light.day);
       fog.near = storm ? 120 : 500;
@@ -73,7 +77,7 @@ export function createWeather(renderer: THREE.WebGLRenderer, scene: THREE.Scene)
         env = { target: pmrem.fromScene(envScene), sun: dir, storm };
         scene.environment = env.target.texture;
       }
-      scene.environmentIntensity = 0.12 + 0.38 * light.day * (storm ? 0.6 : 1);
+      scene.environmentIntensity = 0.1 + 0.25 * light.day * (storm ? 0.6 : 1);
     },
   };
 }
