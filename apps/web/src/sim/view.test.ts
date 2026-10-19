@@ -1,6 +1,6 @@
 import { TECH, TICKERS, type EconomicEvent } from "@hossa/economy";
 import { Session } from "@hossa/market";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { ShipPhase } from "../world/traffic.js";
 import { SimClock } from "./clock.js";
 import type { Snapshot } from "./protocol.js";
@@ -8,6 +8,10 @@ import { Observer, yards } from "./view.js";
 
 /** Sesja jak w workerze: zegar idzie krokami, po kazdym kroku powstaje migawka. */
 function run(seed: number, days: number, events: Record<number, EconomicEvent> = {}): Snapshot[] {
+  return play(seed, days, events).shots;
+}
+
+function play(seed: number, days: number, events: Record<number, EconomicEvent> = {}): { session: Session; shots: Snapshot[] } {
   const session = new Session({ seed, stepsPerDay: 4 });
   const clock = new SimClock(session.stepsPerDay);
   const observer = new Observer(seed);
@@ -19,7 +23,7 @@ function run(seed: number, days: number, events: Record<number, EconomicEvent> =
     session.tick();
     shots.push(observer.snapshot(session, clock));
   }
-  return shots;
+  return { session, shots };
 }
 
 const lastOfDay = (shots: Snapshot[], day: number): Snapshot => shots.filter((s) => s.day === day).at(-1) as Snapshot;
@@ -46,8 +50,18 @@ describe("Observer — migawka przed pierwszym krokiem", () => {
 });
 
 describe("Observer — sesja w toku", () => {
-  const shots = run(42, 12, { 2: { kind: "ZAMOWIENIE", ticker: "MTK", days: 20 } });
-  const last = shots.at(-1) as Snapshot;
+  // sesja liczona w beforeAll, nie przy zbieraniu describe: blad w Observer ma oblac testy
+  let shots: Snapshot[];
+  let last: Snapshot;
+  beforeAll(() => {
+    shots = run(42, 12, { 2: { kind: "ZAMOWIENIE", ticker: "MTK", days: 20 } });
+    last = shots.at(-1) as Snapshot;
+  });
+
+  it("cena otwarcia to otwarcie dzisiejszej swiecy", () => {
+    const { session, shots: own } = play(42, 5);
+    for (const t of TICKERS) expect((own.at(-1) as Snapshot).companies[t].open).toBe(session.markets[t].candles.at(-1)?.open);
+  });
 
   it("czas, dzien i tempo pochodza z zegara i sesji", () => {
     expect(last.day).toBe(12);
@@ -111,6 +125,41 @@ describe("Observer — zdarzenia na makiecie", () => {
     expect(phases).toContain("wraca");
     expect(lastOfDay(shots, 3).companies.BPT.output).toBe(1);
   });
+
+  it("produkcja to dzisiejszy wynik podzielony przez moc zakladu", () => {
+    const { session, shots } = play(11, 12, { 1: { kind: "WYPADEK", ticker: "RUD", days: 20 }, 2: { kind: "AWARIA", ticker: "MTK", days: 20 } });
+    const produced = session.economy.last?.produced;
+    const last = shots.at(-1) as Snapshot;
+    expect(last.companies.RUD.output).toBeCloseTo((produced?.ore ?? 0) / TECH.oreCapacity);
+    expect(last.companies.RUD.output).toBeLessThan(0.5);
+    expect(last.companies.MTK.output).toBeCloseTo((produced?.machines ?? 0) / TECH.machineCapacity);
+    expect(last.companies.MTK.output).toBeLessThan(0.75);
+    // po 10 dniach slabego wydobycia hucie konczy sie ruda
+    expect(last.companies.STW.output).toBeCloseTo((produced?.steel ?? 0) / TECH.steelCapacity);
+    expect(last.companies.STW.output).toBeLessThan(1);
+  });
+
+  it("wydzwiek wiadomosci to srednia wplywu na wszystkie spolki, ktorych dotyczy", () => {
+    const shots = run(7, 2, { 1: { kind: "STRAJK", ticker: "RUD", days: 5 } });
+    // kopalnia -0,8, huta -0,3, fabryka -0,1
+    expect((shots.at(-1) as Snapshot).news.find((n) => n.text.includes("Strajk"))?.tone).toBeCloseTo(-0.4);
+  });
+
+  it("nowe zloze dziala na stale i nie wisi na liscie zdarzen z liczba dni", () => {
+    const shots = run(2, 3, { 1: { kind: "ZLOZE", ticker: "RUD", days: 1 } });
+    expect((shots.at(-1) as Snapshot).incidents.map((i) => i.kind)).not.toContain("ZLOZE");
+  });
+
+  it("z dlugiego dziennika zostaje 8 najnowszych wiadomosci z numerami od poczatku sesji", () => {
+    const hold: EconomicEvent = { kind: "STOPY", days: 1, size: 0 };
+    const events = Object.fromEntries(Array.from({ length: 10 }, (_, d) => [d + 1, hold]));
+    const { session, shots } = play(4, 11, events);
+    const news = (shots.at(-1) as Snapshot).news;
+    expect(news).toHaveLength(8);
+    expect(news.at(-1)?.id).toBe(session.news.length - 1);
+    expect(news[0]?.id).toBe(session.news.length - 8);
+    expect(news[0]?.text).toBe(session.news.at(-8)?.headline);
+  });
 });
 
 describe("Observer — zdarzenia bez spolki", () => {
@@ -124,6 +173,7 @@ describe("Observer — zdarzenia bez spolki", () => {
 
 describe("yards", () => {
   it("dzieli zapasy przez pojemnosc placow i przycina do 0..1", () => {
+    expect(yards({ mineOre: 0, millOre: TECH.millOreYard / 4, millSteel: 0, factorySteel: 0, backlog: 0, portSteel: 0, portMachines: 0 }, 0).millOre).toBe(0.25);
     const y = yards({ mineOre: TECH.mineYard / 2, millOre: TECH.millOreYard * 2, millSteel: 0, factorySteel: 0, backlog: 0, portSteel: 700, portMachines: 100 }, -0.5);
     expect(y).toEqual({ mine: 0.5, millOre: 1, factory: 0, portSteel: 700 / 3500, portMachines: 100 / 1000 });
   });

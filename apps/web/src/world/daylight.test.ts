@@ -33,6 +33,17 @@ describe("daylight", () => {
     expect(daylight(0.5).elevation).toBeLessThan(0);
   });
 
+  it("wieczorem slonce schodzi pod horyzont na polnocnym zachodzie, o polnocy jest na polnocy", () => {
+    const evening = daylight(23);
+    expect(evening.elevation).toBeCloseTo(-24 * Math.sin(Math.PI / 4));
+    // azymut 315°: tyle samo na zachod (-x) co na polnoc (-z)
+    expect(evening.sun[0]).toBeLessThan(0);
+    expect(evening.sun[0]).toBeCloseTo(evening.sun[2]);
+    const midnight = daylight(1);
+    expect(midnight.sun[0]).toBeCloseTo(0);
+    expect(midnight.sun[2]).toBeLessThan(0);
+  });
+
   it("latarnie zapalaja sie, zanim slonce zajdzie, a gasna po wschodzie", () => {
     expect(daylight(DUSK - 0.1).lampsOn).toBe(true);
     expect(daylight(DUSK - 3).lampsOn).toBe(false);

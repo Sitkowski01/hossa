@@ -58,9 +58,8 @@ export class Observer {
       const market = session.markets[t];
       companies[t] = { price: market.last, open: market.candles.at(-1)?.open ?? market.last, fair: session.fairValue(t), output: clamp01(output[t]) };
     }
-    const dispatches: Dispatch[] = report.dispatched
-      .filter((s) => s.departs === day)
-      .map((s) => ({ route: `${s.from}-${s.to}` as Route, good: s.good, quantity: s.quantity }));
+    // raport jest z dzisiaj, wiec jego wysylki to dzisiejsze wyjazdy
+    const dispatches: Dispatch[] = report.dispatched.map((s) => ({ route: `${s.from}-${s.to}` as Route, good: s.good, quantity: s.quantity }));
     const incidents: Incident[] = economy
       .activeEffects()
       .filter((e) => Number.isFinite(e.until))

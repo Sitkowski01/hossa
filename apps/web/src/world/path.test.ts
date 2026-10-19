@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { densify, keepRight, polyline, roundCorners, sampleAt, type Vec2, type Vec3 } from "./path.js";
 
 const flat = (pts: readonly Vec2[]): Vec3[] => pts.map(([x, z]) => [x, 0, z]);
@@ -24,6 +24,25 @@ describe("roundCorners", () => {
     const out = roundCorners([[0, 0], [8, 0], [8, 100]], 10, 2);
     expect(out[1]).toEqual([4, 0]);
     expect(out[3]).toEqual([8, 4]);
+  });
+
+  it("ten sam zakret przesuniety na mapie daje ten sam luk, przesuniety", () => {
+    const shifted = roundCorners(L.map(([x, z]): Vec2 => [x + 5, z + 10]), 10, 4);
+    roundCorners(L, 10, 4).forEach(([x, z], i) => {
+      expect(shifted[i]?.[0]).toBeCloseTo(x + 5);
+      expect(shifted[i]?.[1]).toBeCloseTo(z + 10);
+    });
+  });
+
+  it("krotki odcinek za zakretem tez zmniejsza promien", () => {
+    const out = roundCorners([[0, 0], [100, 0], [100, 8]], 10, 2);
+    expect(out[1]).toEqual([96, 0]);
+    expect(out[3]).toEqual([100, 4]);
+  });
+
+  it("pusta trasa i pojedynczy punkt zostaja bez zmian", () => {
+    expect(roundCorners([], 10)).toEqual([]);
+    expect(roundCorners([[1, 2]], 10)).toEqual([[1, 2]]);
   });
 
   it("dwa punkty i powtorzony wierzcholek zostawia bez zmian", () => {
@@ -51,7 +70,17 @@ describe("densify", () => {
 });
 
 describe("polyline i sampleAt", () => {
-  const line = polyline([[0, 0, 0], [30, 0, 0], [30, 4, 40]]);
+  // liczone w kazdym tescie, a nie przy zbieraniu describe — blad w polyline ma oblac test
+  let line: ReturnType<typeof polyline>;
+  beforeEach(() => {
+    line = polyline([[0, 0, 0], [30, 0, 0], [30, 4, 40]]);
+  });
+
+  it("na stalej wysokosci liczy dlugosc w poziomie i zostaje na tej wysokosci", () => {
+    const raised = polyline([[0, 5, 0], [30, 5, 0], [30, 5, 40]]);
+    expect(raised.length).toBe(70);
+    expect(sampleAt(raised, 50).position).toEqual([30, 5, 20]);
+  });
 
   it("liczy dlugosc w trzech wymiarach", () => {
     expect(line.cum).toEqual([0, 30, 30 + Math.hypot(4, 40)]);
