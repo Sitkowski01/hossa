@@ -10,3 +10,6 @@ reports/
 test-results/
 playwright-report/
 *.blend1
+blender/.cache/
+*.blend
+__pycache__/
