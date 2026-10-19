@@ -38,3 +38,60 @@ body {
   opacity: 0;
   pointer-events: none;
 }
+
+.hud {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgb(11 18 32 / 82%);
+  backdrop-filter: blur(6px);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-nazwa {
+  letter-spacing: 0.04em;
+}
+
+.hud-indeks[data-kierunek="wzrost"] {
+  color: var(--wzrost);
+}
+
+.hud-indeks[data-kierunek="spadek"] {
+  color: var(--spadek);
+}
+
+.hud-tempo {
+  display: flex;
+  gap: 4px;
+}
+
+.hud-tempo button {
+  min-width: 44px;
+  min-height: 32px;
+  border: 1px solid #2a3a52;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tekst);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud-tempo button[aria-pressed="true"] {
+  background: #1d2b42;
+  border-color: var(--wzrost);
+}
+
+.hud-tempo button:focus-visible {
+  outline: 2px solid var(--wzrost);
+  outline-offset: 2px;
+}
