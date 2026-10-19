@@ -1,0 +1,79 @@
+import * as THREE from "three";
+import { Sky } from "three/addons/objects/Sky.js";
+import type { Daylight } from "../world/daylight.js";
+
+const SUN_DISTANCE = 400;
+const DAY_SUN = 2.6;
+const NIGHT_BLUE = new THREE.Color(0x0b1424);
+const FOG_DAY = new THREE.Color(0xb8c7d6);
+const FOG_STORM = new THREE.Color(0x56606b);
+
+export interface Weather {
+  update(light: Daylight, storm: boolean): void;
+}
+
+/** Ustawia niebo: slonce w danym kierunku, w sztorm mgliste i szare. */
+function configure(sky: Sky, sun: THREE.Vector3, storm: boolean): void {
+  const u = sky.material.uniforms as Record<"sunPosition" | "turbidity" | "rayleigh" | "mieCoefficient" | "mieDirectionalG", THREE.IUniform>;
+  (u.sunPosition.value as THREE.Vector3).copy(sun);
+  u.turbidity.value = storm ? 14 : 4;
+  u.rayleigh.value = storm ? 3.5 : 1.2;
+  u.mieCoefficient.value = 0.005;
+  u.mieDirectionalG.value = 0.8;
+}
+
+/**
+ * Slonce, mgla i tlo. Jedno slonce rzuca cienie; otoczenie (odbicia i swiatlo rozproszone)
+ * pochodzi z fizycznego nieba (Sky), przeliczanego do mapy otoczenia tylko wtedy, gdy slonce
+ * przesunie sie zauwazalnie — i z ograniczona sila, zeby jasne tynki sie nie przepalaly.
+ * Samego nieba nie widac: jest o rzedy wielkosci jasniejsze niz makieta i rozlewaloby sie
+ * w poswiacie. Tlo ma kolor mgly, jak makieta na stole w pokoju.
+ */
+export function createWeather(renderer: THREE.WebGLRenderer, scene: THREE.Scene): Weather {
+
+  const sun = new THREE.DirectionalLight(0xfff1dc, DAY_SUN);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.6;
+  Object.assign(sun.shadow.camera, { left: -240, right: 240, top: 200, bottom: -200, near: 50, far: 900 });
+  scene.add(sun, sun.target);
+
+  // noca miasto oswietla ksiezyc: slabe, chlodne swiatlo z gory
+  const moon = new THREE.HemisphereLight(0x8fa8d8, 0x101820, 0);
+  scene.add(moon);
+  const fog = new THREE.Fog(FOG_DAY, 500, 1500);
+  scene.fog = fog;
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new THREE.Scene();
+  const envSky = new Sky();
+  envSky.scale.setScalar(1000);
+  envScene.add(envSky);
+  let env: { target: THREE.WebGLRenderTarget; sun: THREE.Vector3; storm: boolean } | undefined;
+
+  return {
+    update(light, storm) {
+      const dir = new THREE.Vector3(...light.sun);
+
+      sun.position.copy(dir).multiplyScalar(SUN_DISTANCE);
+      sun.intensity = DAY_SUN * light.day * (storm ? 0.35 : 1);
+      sun.visible = light.elevation > -2;
+      moon.intensity = 0.35 * (1 - light.day);
+
+      fog.color.copy(FOG_DAY).lerp(FOG_STORM, storm ? 1 : 0).lerp(NIGHT_BLUE, 1 - light.day);
+      fog.near = storm ? 120 : 500;
+      fog.far = storm ? 700 : 1500;
+      scene.background = fog.color;
+
+      // mapa otoczenia: przeliczana, gdy slonce przesunie sie o ~2° albo zmieni sie pogoda
+      if (!env || dir.angleTo(env.sun) > 0.035 || env.storm !== storm) {
+        configure(envSky, dir, storm);
+        env?.target.dispose();
+        env = { target: pmrem.fromScene(envScene), sun: dir, storm };
+        scene.environment = env.target.texture;
+      }
+      scene.environmentIntensity = 0.12 + 0.38 * light.day * (storm ? 0.6 : 1);
+    },
+  };
+}
