@@ -14,7 +14,8 @@
     "arch": "depcruise packages apps --config .dependency-cruiser.cjs",
     "mutation": "pnpm build && pnpm -r --workspace-concurrency=1 mutation",
     "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm arch && pnpm test",
-    "sesja": "pnpm -r --reporter=silent build && node apps/sesja/dist/main.js"
+    "sesja": "pnpm -r --reporter=silent build && node apps/sesja/dist/main.js",
+    "model": "pnpm --filter @hossa/model build && pnpm --filter @hossa/model optimize"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

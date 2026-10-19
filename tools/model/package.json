@@ -1,0 +1,20 @@
+{
+  "name": "@hossa/model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "optimize": "node dist/optimize.js ../../blender/.cache/makieta-surowa.glb ../../apps/web/public/makieta.glb",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "meshoptimizer": "1.3.0",
+    "sharp": "0.35.5",
+    "vitest": "4.1.11"
+  }
+}
