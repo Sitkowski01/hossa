@@ -6,8 +6,62 @@ w centrum. Kursy nie są losowane: powstają w prawdziwym arkuszu zleceń, w kt�
 inwestorów reagują na to, co dzieje się na makiecie (strajk, sztorm, wyniki kwartalne,
 decyzja banku centralnego).
 
-> Projekt w budowie. Gotowy jest silnik giełdy; gospodarka, makieta i interfejs powstają
-> etapami.
+> Projekt w budowie. Gotowe są silnik giełdy, gospodarka miasteczka i rynek z botami
+> (na razie w terminalu: `pnpm sesja`). Makieta 3D i interfejs powstają etapami.
+
+```
+packages/engine    arkusz zleceń (port Parkietu)          zero zależności
+packages/economy   gospodarka miasteczka, zdarzenia, wieści  zero zależności
+packages/market    giełda: arkusze sześciu spółek + boty    engine + economy
+apps/sesja         sesja w terminalu                        market
+```
+
+## Gospodarka miasteczka (`packages/economy`)
+
+Sześć spółek w jednym łańcuchu dostaw. Kopalnia Rudawa (RUD) wydobywa rudę, którą ciężarówki
+wożą do Huty Stalwar (STW). Stal jedzie do Fabryki Motorek (MTK) i do Bałtportu (BPT), skąd
+co kilka dni statek zabiera eksport. Pensje z całego miasta wracają do Sieci Koszyk (KSZ),
+a Bank Grosz (GRS) pożycza wszystkim i płaci odsetki od lokat mieszkańców.
+
+- **Księga podwójnego zapisu.** Każdy przepływ pieniędzy to przelew między dwoma kontami
+  (spółki, mieszkańcy, reszta świata), więc suma wszystkich sald jest stała co do grosza —
+  test sprawdza to po każdym dniu na losowych ziarnach.
+- **Zysk memoriałowy.** Sprzedaż eksportowa liczy się w chwili wysyłki do portu; sztorm
+  opóźnia pieniądze, ale nie kasuje sprzedaży (za to port płaci za postój statków).
+- **Wycena** = roczny zysk (średnia z ~30 dni) × 1 / (stopa procentowa + premia za ryzyko)
+  ÷ liczba akcji. Podwyżka stóp obniża mnożnik od razu, a wyższe odsetki — zyski z czasem.
+  Straty jednorazowe (odpis złych kredytów) obniżają majątek, nie przyszłe zyski.
+- **Zdarzenia** z zadanym prawdopodobieństwem dziennym: strajk, wypadek, nowe złoże, drogi
+  węgiel, duży kontrakt, awaria, sztorm, spadek nastrojów, złe długi; do tego posiedzenia banku
+  centralnego co 45 dni, sezon świąteczny i wyniki kwartalne. Każde zdarzenie trafia do
+  wiadomości z wydźwiękiem dla każdej spółki, której dotyczy — także dla odbiorców
+  w łańcuchu dostaw (strajk w kopalni to też zła wiadomość dla huty).
+
+## Rynek (`packages/market`)
+
+Każda spółka ma własny arkusz z silnika i ośmiu graczy: animatora rynku, trzech inwestorów
+fundamentalnych (różne opóźnienia i poglądy), gracza na newsach, gracza momentum i dwóch
+losowych. Kurs powstaje z ich zleceń.
+
+- Gracz na newsach reaguje od razu i często przesadza; fundamentalni dociągają cenę do wyceny
+  z opóźnieniem — stąd przestrzelenia i korekty.
+- Animator poszerza spread i wycofuje się, gdy rynek robi się nerwowy — płynność znika wtedy,
+  kiedy jest najbardziej potrzebna.
+- Każda transakcja przenosi akcje i gotówkę między dwoma graczami: suma pozycji i suma
+  gotówki wszystkich graczy to zawsze zero.
+
+### Testy kontrfaktyczne
+
+Jak sprawdzić, że „strajk obniża kurs”, skoro rynek i tak ciągle się rusza? Ta sama sesja
+(to samo ziarno) uruchamiana jest dwa razy: bez zdarzenia i z ręcznie wstrzykniętym. Gospodarka
+losuje zawsze tyle samo razy dziennie, a każdy bot ma własny generator, więc oba przebiegi
+różnią się wyłącznie skutkami tego jednego zdarzenia. Testy sprawdzają m.in., że strajk
+w kopalni obniża kurs kopalni, a potem huty; że podwyżka stóp obniża indeks; że dobra
+wiadomość podnosi kurs tego samego dnia, zanim zmienią się zyski.
+
+```bash
+pnpm sesja --seed 42 --dni 180
+```
 
 ## Silnik giełdy (`packages/engine`)
 
