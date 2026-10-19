@@ -75,3 +75,43 @@ export const limit = (id: number, side: Side, price: number, quantity: number): 
 
 export const market = (id: number, side: Side, quantity: number): OrderRequest =>
   orderRequest(id, side, "MARKET", 0, quantity);
+
+/** Reszta zlecenia LIMIT, ktorej nie dalo sie skojarzyc, czeka w arkuszu. */
+export interface OrderRested {
+  readonly kind: "RESTED";
+  readonly orderId: number;
+  readonly side: Side;
+  readonly price: number;
+  readonly quantity: number;
+}
+
+/**
+ * Transakcja. Cena zawsze pochodzi od zlecenia, ktore czekalo w arkuszu (maker):
+ * kupujacy gotowy zaplacic 105 zl trafia na sprzedaz po 100 zl i placi 100 zl.
+ */
+export interface Trade {
+  readonly kind: "TRADE";
+  readonly makerOrderId: number;
+  readonly takerOrderId: number;
+  readonly takerSide: Side;
+  readonly price: number;
+  readonly quantity: number;
+}
+
+export interface OrderCancelled {
+  readonly kind: "CANCELLED";
+  readonly orderId: number;
+  readonly quantity: number;
+  /** REQUESTED: anulowanie zlecenia czekajacego. NO_LIQUIDITY: reszta zlecenia MARKET przepada. */
+  readonly reason: "REQUESTED" | "NO_LIQUIDITY";
+}
+
+/** Unia zamknieta: `switch` po `kind` bez ktoregos wariantu nie przejdzie kontroli typow. */
+export type BookEvent = OrderRested | Trade | OrderCancelled;
+
+/** Jeden poziom cenowy w widoku zagregowanym: ile akcji i ile zlecen czeka po tej cenie. */
+export interface PriceLevel {
+  readonly price: number;
+  readonly quantity: number;
+  readonly orders: number;
+}
