@@ -20,9 +20,15 @@ interface Layout {
   trasy: Record<string, string[]>;
   statek: { nabrzeze: [number, number] };
 }
+interface Instances {
+  drzewa: Record<string, [number, number, number, number, number][]>;
+  latarnie: [number, number, number][];
+  auta: [number, number, number, string][];
+}
 
 const repo = (path: string) => fileURLToPath(new URL(`../../../${path}`, import.meta.url));
 const layout = JSON.parse(readFileSync(repo("blender/layout.json"), "utf8")) as Layout;
+const instances = JSON.parse(readFileSync(repo("apps/web/public/makieta.json"), "utf8")) as Instances;
 const GLB = repo("apps/web/public/makieta.glb");
 
 const TICKERS = ["RUD", "STW", "MTK", "BPT", "KSZ", "GRS", "GIELDA"];
@@ -68,6 +74,16 @@ const node = (key: string) => {
   const [x, y] = layout.wezly[key] ?? [Number.NaN, Number.NaN];
   return { x, y };
 };
+const segment = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / (abx * abx + aby * aby)));
+  return Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t));
+};
+/** Odleglosc od krawedzi najblizszej jezdni (ujemna = punkt na asfalcie); liczy szerokosc kazdej drogi. */
+const fromAsphalt = (p: { x: number; y: number }) =>
+  Math.min(...layout.drogi.map(([a, b, w]) => segment(p, node(a), node(b)) - w / 2));
+
 describe("paczka dla przegladarki", () => {
   it("miesci sie w budzecie 15 MB", () => {
     expect(statSync(GLB).size).toBeLessThan(15 * 1024 * 1024);
@@ -164,6 +180,51 @@ describe("trasy ciezarowek i drogi", () => {
           const y = pa.y + ((pb.y - pa.y) * s) / len + ny * side;
           expect(inside(x, y), `${a}-${b} na terenie ${key}`).toBe(false);
         }
+      }
+    }
+  });
+});
+
+describe("instancje z makieta.json", () => {
+  const trees = Object.values(instances.drzewa).flat();
+
+  it("drzew jest dosc na las, a kazde rosnie na makiecie i poza jezdnia", () => {
+    expect(trees.length).toBeGreaterThan(500);
+    const [x0, x1] = layout.teren.x;
+    const [, y1] = layout.teren.y;
+    for (const [x, y] of trees) {
+      expect(x).toBeGreaterThan(x0);
+      expect(x).toBeLessThan(x1);
+      expect(y).toBeGreaterThan(layout.teren.brzeg);
+      expect(y).toBeLessThan(y1);
+      expect(fromAsphalt({ x, y }), `drzewo ${String(x)},${String(y)}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("drzewa nie rosna jedno w drugim", () => {
+    const sorted = [...trees].sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < sorted.length; i++) {
+      const [xi = 0, yi = 0] = sorted[i] ?? [];
+      for (let j = i + 1; j < sorted.length && (sorted[j]?.[0] ?? Infinity) - xi < 2; j++) {
+        const [xj = 0, yj = 0] = sorted[j] ?? [];
+        expect(Math.hypot(xi - xj, yi - yj)).toBeGreaterThan(2);
+      }
+    }
+  });
+
+  it("latarnie stoja na poboczu, a zaparkowane auta na jezdni", () => {
+    for (const [x, y] of instances.latarnie) {
+      expect(fromAsphalt({ x, y })).toBeGreaterThan(-0.01);
+      expect(fromAsphalt({ x, y })).toBeLessThan(2);
+    }
+    for (const [x, y] of instances.auta) expect(fromAsphalt({ x, y })).toBeLessThan(0);
+  });
+
+  it("drzewa i latarnie nie stoja na terenie firm", () => {
+    for (const [x, y] of [...trees, ...instances.latarnie]) {
+      for (const [key, c] of Object.entries(layout.firmy)) {
+        const inside = Math.abs(x - c.x) < c.obszar[0] / 2 && Math.abs(y - c.y) < c.obszar[1] / 2;
+        expect(inside, `${String(x)},${String(y)} na terenie ${key}`).toBe(false);
       }
     }
   });
