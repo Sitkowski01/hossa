@@ -45,6 +45,27 @@ module.exports = {
       to: { path: "^apps/" },
     },
     {
+      name: "scena-zna-tylko-migawki",
+      comment: "w przegladarce gielde i gospodarke liczy Web Worker (apps/web/src/sim); reszta aplikacji dostaje od niego tylko migawki",
+      severity: "error",
+      from: { path: "^apps/web/src/", pathNot: "^apps/web/src/sim/" },
+      to: { path: "^(packages/(engine|market)|node_modules/@hossa/(engine|market))" },
+    },
+    {
+      name: "scena-bierze-z-gospodarki-tylko-typy",
+      comment: "nazwy spolek i rodzaje zdarzen tak, ale zadnego kodu symulacji poza workerem",
+      severity: "error",
+      from: { path: "^apps/web/src/", pathNot: "^apps/web/src/sim/" },
+      to: { path: "^(packages/economy|node_modules/@hossa/economy)", dependencyTypesNot: ["type-only"] },
+    },
+    {
+      name: "symulacja-i-geometria-bez-grafiki",
+      comment: "sim/ i world/ to czysta logika testowana w Node: bez three.js i bez sceny",
+      severity: "error",
+      from: { path: "^apps/web/src/(sim|world)/" },
+      to: { path: "^(node_modules/three|apps/web/src/scene/)" },
+    },
+    {
       name: "bez-cykli",
       severity: "error",
       from: {},

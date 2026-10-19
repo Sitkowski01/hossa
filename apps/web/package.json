@@ -1,0 +1,26 @@
+{
+  "name": "@hossa/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@hossa/economy": "workspace:*",
+    "@hossa/market": "workspace:*",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/three": "0.186.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "fast-check": "4.10.2",
+    "vite": "8.3.4",
+    "vitest": "4.1.11"
+  }
+}
