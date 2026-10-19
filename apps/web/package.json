@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 4173 --strictPort",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e",
     "test": "vitest run --coverage",
-    "e2e": "playwright test",
+    "e2e": "playwright test -c e2e",
     "mutation": "stryker run"
   },
   "dependencies": {
@@ -22,6 +22,7 @@
     "@stryker-mutator/core": "10.0.0",
     "@stryker-mutator/typescript-checker": "10.0.0",
     "@stryker-mutator/vitest-runner": "10.0.0",
+    "@types/node": "24.19.2",
     "@types/three": "0.186.0",
     "@vitest/coverage-v8": "4.1.11",
     "fast-check": "4.10.2",

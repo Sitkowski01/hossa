@@ -10,7 +10,7 @@ export default tseslint.config(
       parserOptions: {
         projectService: {
           // Pliki konfiguracyjne nie naleza do zadnego tsconfig — sprawdzamy je domyslnym.
-          allowDefaultProject: ["*.js", "packages/*/*.config.ts", "apps/*/*.config.ts"],
+          allowDefaultProject: ["*.js", "packages/*/*.config.ts", "apps/*/vite*.config.ts"],
         },
         tsconfigRootDir: import.meta.dirname,
       },
