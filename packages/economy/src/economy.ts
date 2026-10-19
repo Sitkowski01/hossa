@@ -4,7 +4,7 @@ import { Incidents } from "./incidents.js";
 import { Ledger } from "./ledger.js";
 import { Logistics, type Produced, type Shipment, type Stocks } from "./logistics.js";
 import { Rng } from "./rng.js";
-import { applyRate } from "./rules.js";
+import { applyRate, dividend, quarterNews } from "./rules.js";
 
 /** Co sie dzialo danego dnia — dla makiety i wiadomosci. */
 export interface DayReport {
@@ -30,6 +30,8 @@ export class Economy {
   day = -WARMUP_DAYS;
   rateBp = 500;
   readonly ledger = new Ledger({ HH: zl(100_000_000), SWIAT: zl(100_000_000_000), ...perTicker(zl(50_000_000)) });
+  /** Zysk w ostatnim kwartale (grosze), do porownania z kolejnym raportem. */
+  readonly lastQuarterProfit = perTicker(0);
   readonly initialFair = perTicker(0);
   last: DayReport | undefined;
 
@@ -38,16 +40,34 @@ export class Economy {
   private readonly rng: Rng;
   private live = false;
   private incomeEma = zl(900_000);
+  /** Dywidendy rozlozone na dni kwartalu — tyle dziennie mieszkancy licza jako dochod z akcji. */
+  private dividendStream = 0;
   private readonly earningsEma = perTicker(0);
-  /** Jednorazowe straty: dnia (pomijane w sredniej) i suma (obniza wycene). */
+  private readonly quarterProfit = perTicker(0);
+  private readonly expectedQuarter = perTicker(0);
+  /** Jednorazowe straty: dnia (pomijane w sredniej), kwartalu (pomijane w niespodziance) i suma (obniza wycene). */
   private readonly oneOff = perTicker(0);
+  private readonly quarterOneOff = perTicker(0);
   private readonly writedowns = perTicker(0);
+  private readonly pendingDividend = perTicker(0);
 
   constructor(seed: number) {
     this.rng = new Rng(seed);
     // Rozruch bez zdarzen od dnia -150 do 0: zapasy, kolejki i srednie zyskow dochodza do stanu ustalonego.
-    while (this.day < 0) this.step();
-    for (const t of TICKERS) this.initialFair[t] = this.fairValue(t);
+    while (this.day < 0) {
+      // W polowie rozruchu mieszkancy zaczynaja liczyc na dywidendy z biezacych zyskow — bez skoku po starcie.
+      if (this.day === -WARMUP_DAYS / 2) {
+        const yearly = TICKERS.reduce((sum, t) => sum + dividend(this.earningsEma[t] * TECH.daysPerQuarter), 0);
+        this.dividendStream = (yearly * TECH.localOwnership) / TECH.daysPerQuarter;
+      }
+      this.step();
+    }
+    for (const t of TICKERS) {
+      this.quarterProfit[t] = 0;
+      this.expectedQuarter[t] = this.earningsEma[t] * TECH.daysPerQuarter;
+      this.lastQuarterProfit[t] = this.expectedQuarter[t];
+      this.initialFair[t] = this.fairValue(t);
+    }
     this.live = true;
   }
 
@@ -97,6 +117,7 @@ export class Economy {
     const L = this.ledger;
     L.startDay();
     const day = (this.day += 1);
+    const dividendsToday = this.payDividends();
     const cashStart = perTicker(0);
     for (const t of TICKERS) cashStart[t] = L.balance(t);
     const pipelineStart = this.logistics.pipeline();
@@ -113,7 +134,7 @@ export class Economy {
     const ship = this.logistics.ship(day, inc.storm(), L);
 
     this.payCosts();
-    const retail = this.shopping();
+    const retail = this.shopping(dividendsToday);
 
     // Zysk dnia memorialowo: zmiana gotowki plus zmiana naleznosci za towar sprzedany na eksport,
     // ktory jeszcze czeka na statek. Sztorm opoznia pieniadze, ale nie kasuje sprzedazy.
@@ -122,8 +143,11 @@ export class Economy {
     for (const t of TICKERS) {
       profit[t] = L.balance(t) - cashStart[t] + pipelineEnd[t] - pipelineStart[t];
       this.earningsEma[t] += (profit[t] + this.oneOff[t] - this.earningsEma[t]) / EMA_DAYS;
+      this.quarterOneOff[t] += this.oneOff[t];
       this.oneOff[t] = 0;
+      this.quarterProfit[t] += profit[t];
     }
+    if (this.live && day % TECH.daysPerQuarter === 0) this.closeQuarter(news);
 
     this.last = { day, produced, dispatched, ship, retail, news, profit };
     return this.last;
@@ -143,6 +167,21 @@ export class Economy {
     news.push(newsOf(event, this.day, this.rateBp));
   }
 
+  /** Dywidendy za zamkniety wczoraj kwartal: czesc dla mieszkancow, reszta dla inwestorow z zewnatrz. */
+  private payDividends(): number {
+    let local = 0;
+    for (const t of TICKERS) {
+      const toTown = Math.round(this.pendingDividend[t] * TECH.localOwnership);
+      this.ledger.transfer(t, "HH", toTown);
+      this.ledger.transfer(t, "SWIAT", this.pendingDividend[t] - toTown);
+      local += toTown;
+      this.pendingDividend[t] = 0;
+    }
+    // Mieszkancy wydaja je rozsadnie: do dochodu po 1/90 dziennie przez caly kwartal.
+    if (local > 0) this.dividendStream = local / TECH.daysPerQuarter;
+    return local;
+  }
+
   /** Koszty stale (czesc to pensje), odsetki od kredytow i odsetki od lokat mieszkancow. */
   private payCosts(): void {
     const daily = (bp: number) => bp / 10_000 / TECH.daysPerYear;
@@ -158,8 +197,9 @@ export class Economy {
   }
 
   /** Zakupy mieszkancow ze sredniego dochodu; towar w sklepach pochodzi z importu przez port. */
-  private shopping(): number {
-    this.incomeEma += (this.ledger.inflow("HH") - this.incomeEma) / 20;
+  private shopping(dividendsToday: number): number {
+    const income = this.ledger.inflow("HH") - dividendsToday + this.dividendStream;
+    this.incomeEma += (income - this.incomeEma) / 20;
     const retail = Math.round(TECH.propensity * this.incomeEma * this.incidents.factor("confidence"));
     const imports = retail * (1 - TECH.retailMargin);
     this.ledger.transfer("HH", "KSZ", retail);
@@ -168,4 +208,15 @@ export class Economy {
     return retail;
   }
 
+  private closeQuarter(news: News[]): void {
+    for (const t of TICKERS) {
+      const profit = this.quarterProfit[t];
+      news.push(quarterNews(t, this.day, profit, this.expectedQuarter[t], this.quarterOneOff[t]));
+      this.pendingDividend[t] = dividend(profit);
+      this.lastQuarterProfit[t] = profit;
+      this.quarterProfit[t] = 0;
+      this.quarterOneOff[t] = 0;
+      this.expectedQuarter[t] = this.earningsEma[t] * TECH.daysPerQuarter;
+    }
+  }
 }
