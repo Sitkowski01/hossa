@@ -7,6 +7,9 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 
 /** Jasnosc (liniowa, przed tone mappingiem), od ktorej piksel swieci. */
 export const BLOOM_THRESHOLD = 3;
+const FOV = 40;
+const WIDE = 1.3; // od tych proporcji w dol pole widzenia rosnie
+const MAX_FOV = 62;
 
 export interface Stage {
   readonly renderer: THREE.WebGLRenderer;
@@ -31,11 +34,15 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 1, 2000);
-  camera.position.set(-170, 190, 270);
+  const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 2000);
+  // telefon w pionie patrzy po przekatnej makiety (dluzszy bok idzie w glab ekranu)
+  const portrait = canvas.clientWidth < canvas.clientHeight;
+  if (portrait) camera.position.set(195, 290, 305);
+  else camera.position.set(-110, 240, 300);
 
   const controls = new OrbitControls(camera, canvas);
-  controls.target.set(0, 0, 10);
+  if (portrait) controls.target.set(35, 0, 25);
+  else controls.target.set(10, 0, -10);
   controls.enableDamping = true;
   controls.minDistance = 40;
   controls.maxDistance = 520;
@@ -54,6 +61,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     renderer.setSize(w, h, false);
     composer.setSize(w, h);
     camera.aspect = w / Math.max(h, 1);
+    // na waskim ekranie (telefon w pionie) szersze pole widzenia, zeby makieta miescila sie wszerz
+    camera.fov = Math.min(MAX_FOV, Math.max(FOV, (FOV * WIDE) / camera.aspect));
     camera.updateProjectionMatrix();
   };
   new ResizeObserver(resize).observe(canvas);

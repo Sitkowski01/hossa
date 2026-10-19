@@ -78,7 +78,7 @@ function frame(now: number): void {
     sky.update(light, storm);
     trucks.update(snap, fraction);
     props.update(snap, fraction, light, simDt, now);
-    tickers.update(snap, dt);
+    tickers.update(snap, dt, stage.camera, { width: canvas.clientWidth, height: canvas.clientHeight });
     pickets.update(snap, now);
     rain.update(storm, dt);
     for (const c of chimneys) c.smoke.update(c.rate(snap), simDt, light.day);

@@ -9,9 +9,10 @@ const TICKERS: readonly Ticker[] = ["RUD", "STW", "MTK", "BPT", "KSZ", "GRS"];
 const UP = "#2fbf71";
 const DOWN = "#e5484d";
 const FLAT = "#93a4bb";
+const SIGN_PX = 130;
 
 export interface Tickers {
-  update(snapshot: Snapshot, dt: number): void;
+  update(snapshot: Snapshot, dt: number, camera: THREE.PerspectiveCamera, viewport: { width: number; height: number }): void;
 }
 
 const tone = (pct: number): string => (pct > 0.0005 ? UP : pct < -0.0005 ? DOWN : FLAT);
@@ -31,10 +32,9 @@ export function createTickers(model: Model, scene: THREE.Scene): Tickers {
     // stala wielkosc na ekranie: tabliczka ma byc czytelna z kazdej odleglosci
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, toneMapped: false, sizeAttenuation: false }));
     sprite.renderOrder = 10;
-    sprite.scale.set(0.1, 0.0375, 1);
     sprite.position.copy(model.anchor(`${t}_kurs`)).add(new THREE.Vector3(0, 4, 0));
     scene.add(sprite);
-    return { ticker: t, canvas, texture, text: "" };
+    return { ticker: t, sprite, canvas, texture, text: "" };
   });
 
   const led = model.node("GIELDA_led") as THREE.Mesh;
@@ -49,8 +49,14 @@ export function createTickers(model: Model, scene: THREE.Scene): Tickers {
   let ledText = "";
 
   return {
-    update(snapshot, dt) {
+    update(snapshot, dt, camera, viewport) {
+      // sprite bez perspektywy ma wielkosc w jednostkach wysokosci ekranu, podzielona przez
+      // tan(fov/2); liczymy ja z szerokosci w pikselach, zeby tabliczka byla tak samo czytelna
+      // na monitorze i na telefonie (najwyzej 24% szerokosci ekranu)
+      const px = Math.min(SIGN_PX, viewport.width * 0.24);
+      const size = ((2 * px) / viewport.height) * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
       for (const s of signs) {
+        s.sprite.scale.set(size, size * 0.375, 1);
         const c = snapshot.companies[s.ticker];
         const pct = c.price / c.open - 1;
         const text = `${s.ticker}|${price(c.price)}|${change(pct)}`;
