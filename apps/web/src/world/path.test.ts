@@ -1,6 +1,8 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { densify, roundCorners, type Vec2 } from "./path.js";
+import { densify, keepRight, polyline, roundCorners, sampleAt, type Vec2, type Vec3 } from "./path.js";
 
+const flat = (pts: readonly Vec2[]): Vec3[] => pts.map(([x, z]) => [x, 0, z]);
 const L: Vec2[] = [[0, 0], [100, 0], [100, 50]];
 
 describe("roundCorners", () => {
@@ -45,5 +47,71 @@ describe("densify", () => {
 
   it("pusta lista zostaje pusta", () => {
     expect(densify([], 5)).toEqual([]);
+  });
+});
+
+describe("polyline i sampleAt", () => {
+  const line = polyline([[0, 0, 0], [30, 0, 0], [30, 4, 40]]);
+
+  it("liczy dlugosc w trzech wymiarach", () => {
+    expect(line.cum).toEqual([0, 30, 30 + Math.hypot(4, 40)]);
+    expect(line.length).toBeCloseTo(30 + Math.hypot(4, 40));
+  });
+
+  it("zwraca pozycje i kierunek jazdy w plaszczyznie", () => {
+    const a = sampleAt(line, 15);
+    expect(a.position).toEqual([15, 0, 0]);
+    expect(a.direction).toEqual([1, 0]);
+    const b = sampleAt(line, 30 + line.length / 2 - 15);
+    expect(b.position[1]).toBeCloseTo(2);
+    expect(b.direction[0]).toBeCloseTo(0);
+    expect(b.direction[1]).toBeCloseTo(1);
+  });
+
+  it("przycina droge do poczatku i konca trasy", () => {
+    expect(sampleAt(line, -5).position).toEqual([0, 0, 0]);
+    expect(sampleAt(line, 1e6).position).toEqual([30, 4, 40]);
+  });
+
+  it("dziala na trasie z jednego punktu", () => {
+    const one = polyline([[1, 2, 3]]);
+    expect(one.length).toBe(0);
+    expect(sampleAt(one, 5).position).toEqual([1, 2, 3]);
+  });
+
+  it("wlasnosc: idac dalej po trasie nigdy nie cofamy sie wzgledem poprzedniej probki", () => {
+    const pts = fc.array(fc.tuple(fc.integer({ min: -200, max: 200 }), fc.integer({ min: -200, max: 200 })), { minLength: 2, maxLength: 8 });
+    fc.assert(
+      fc.property(pts, fc.integer({ min: 1, max: 15 }), (raw, r) => {
+        const route = polyline(flat(densify(roundCorners(raw, r), 3)));
+        let prev = sampleAt(route, 0).position;
+        let travelled = 0;
+        for (let s = 1; s <= route.length; s += 1) {
+          const p = sampleAt(route, s).position;
+          travelled += Math.hypot(p[0] - prev[0], p[2] - prev[2]);
+          prev = p;
+        }
+        // suma krokow po 1 m nie moze przekroczyc dlugosci trasy (sciezka nie skacze)
+        expect(travelled).toBeLessThanOrEqual(route.length + 1e-6);
+      }),
+      { numRuns: 100 },
+    );
+  });
+});
+
+describe("keepRight", () => {
+  it("jadac na wschod zjezdza na poludnie (+z), jadac na polnoc (-z) na wschod", () => {
+    expect(keepRight([[0, 0], [10, 0]], 2)).toEqual([[0, 2], [10, 2]]);
+    expect(keepRight([[0, 0], [0, -10]], 2)).toEqual([[2, 0], [2, -10]]);
+  });
+
+  it("na zakrecie przesuwa punkt prostopadle do sredniego kierunku", () => {
+    const [, mid] = keepRight([[0, 0], [10, 0], [10, 10]], Math.SQRT2);
+    expect(mid?.[0]).toBeCloseTo(9);
+    expect(mid?.[1]).toBeCloseTo(1);
+  });
+
+  it("pojedynczy punkt zostaje w miejscu", () => {
+    expect(keepRight([[3, 4]], 2)).toEqual([[3, 4]]);
   });
 });
