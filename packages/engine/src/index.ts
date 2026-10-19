@@ -14,3 +14,4 @@ export {
   type Side,
   type Trade,
 } from "./order.js";
+export { OrderBook, type Snapshot } from "./order-book.js";
