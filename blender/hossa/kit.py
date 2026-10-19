@@ -126,6 +126,77 @@ class Builder:
         self._add(v, sides + [tuple(reversed(range(n)))], mat, m)
         self._add(v, [tuple(range(n, 2 * n))], top_mat or mat, m)
 
+    def beam(self, p1, p2, t, mat):
+        """Belka od punktu do punktu (kratownice wiez, tasmociagi, dzwigi)."""
+        a, b = Vector(p1), Vector(p2)
+        d = b - a
+        m = Matrix.Translation(a) @ d.to_track_quat("Z", "Y").to_matrix().to_4x4()
+        h, n = t / 2, d.length
+        v = [(-h, -h, 0), (h, -h, 0), (h, h, 0), (-h, h, 0), (-h, -h, n), (h, -h, n), (h, h, n), (-h, h, n)]
+        faces = [(3, 2, 1, 0), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+        self._add(v, faces, mat, m)
+
+    def pipe(self, p1, p2, r, mat, seg=10):
+        a, b = Vector(p1), Vector(p2)
+        d = b - a
+        q = d.to_track_quat("Z", "Y").to_matrix().to_4x4()
+        v = [(r * math.cos(2 * math.pi * i / seg), r * math.sin(2 * math.pi * i / seg), z) for z in (0, d.length) for i in range(seg)]
+        faces = [(i, (i + 1) % seg, seg + (i + 1) % seg, seg + i) for i in range(seg)]
+        self._add(v, faces, mat, Matrix.Translation(a) @ q)
+
+    def dome(self, r, at, mat, rings=7, seg=28, squash=1.0):
+        """Kopula z pierscieni (polsfera, splaszczona przez squash)."""
+        for k in range(rings):
+            a0, a1 = math.pi / 2 * k / rings, math.pi / 2 * (k + 1) / rings
+            z0, z1 = r * math.sin(a0) * squash, r * math.sin(a1) * squash
+            self.cyl(r * math.cos(a0), z1 - z0, (at[0], at[1], at[2] + z0), mat, seg=seg, r_top=r * math.cos(a1), caps=k == rings - 1)
+
+    def text(self, content, size, at, mat, rot=0.0, depth=0.15, align="CENTER"):
+        """Napis z wbudowanej czcionki Blendera, stojacy pionowo i patrzacy w -y budynku."""
+        curve = bpy.data.curves.new("napis", "FONT")
+        curve.body = content
+        curve.size = size
+        curve.extrude = depth / 2
+        curve.align_x = align
+        tmp = bpy.data.objects.new("napis", curve)
+        bpy.context.scene.collection.objects.link(tmp)
+        mesh = tmp.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
+        verts = [tuple(v.co) for v in mesh.vertices]
+        faces = [tuple(p.vertices) for p in mesh.polygons]
+        tmp.to_mesh_clear()
+        bpy.data.objects.remove(tmp)
+        bpy.data.curves.remove(curve)
+        upright = Matrix.Rotation(math.radians(90), 4, "X")
+        self._add(verts, faces, mat, self.place(at, rot) @ upright)
+
+    def windows(self, face_from, face_to, z0, rows, cols, size, mat, depth=0.12, frame=None, row_h=3.2):
+        """Rzad okien na scianie od punktu face_from do face_to (w ukladzie budynku)."""
+        a, b = Vector((*face_from, 0)), Vector((*face_to, 0))
+        along = b - a
+        length = along.length
+        direction = along.normalized()
+        out = Vector((direction.y, -direction.x, 0))  # sciana patrzy w prawo od kierunku a->b
+        angle = math.degrees(math.atan2(direction.y, direction.x))
+        w, h = size
+        step = length / cols
+        for r in range(rows):
+            for c in range(cols):
+                base = a + direction * (step * (c + 0.5))
+                z = z0 + r * row_h
+                if not frame:
+                    centre = base + out * (depth / 2)
+                    self.box((w, depth, h), (centre.x, centre.y, z), mat, rot=angle, skip=("bottom", "back"))
+                    continue
+                # szyba lekko cofnieta w ramie: rama z czterech listew, slupek i parapet
+                glass, bar = base + out * 0.02, base + out * 0.05
+                self.box((w, 0.04, h), (glass.x, glass.y, z), mat, rot=angle, skip=("bottom", "back"))
+                for side in (-1, 1):
+                    p = bar + direction * side * (w / 2 + 0.06)
+                    self.box((0.12, 0.1, h + 0.12), (p.x, p.y, z - 0.06), frame, rot=angle, skip=("bottom", "back"))
+                self.box((w + 0.24, 0.1, 0.12), (bar.x, bar.y, z + h), frame, rot=angle, skip=("back",))
+                self.box((0.06, 0.07, h), (bar.x, bar.y, z), frame, rot=angle, skip=("bottom", "back"))
+                sill = base + out * 0.1
+                self.box((w + 0.4, 0.2, 0.1), (sill.x, sill.y, z - 0.12), "beton_sciana", rot=angle, skip=("back",))
 
     def done(self, name, coll, smooth=False):
         mesh = bpy.data.meshes.new(name)
@@ -158,3 +229,34 @@ class Builder:
         return obj
 
 
+def attach(child, parent):
+    """Podpina obiekt pod rodzica bez przesuwania go (matrix_world nie jest jeszcze przeliczona)."""
+    child.parent = parent
+    child.matrix_parent_inverse = parent.matrix_basis.inverted()
+
+
+def fence(b, w, d, gate=12):
+    """Ogrodzenie z siatki na slupkach dookola terenu zakladu, z brama na srodku frontu (-y)."""
+    hx, hy = w / 2 - 1, d / 2 - 1
+    ring = [(-hx, -hy), (hx, -hy), (hx, hy), (-hx, hy), (-hx, -hy)]
+    for (ax, ay), (bx, by) in zip(ring, ring[1:]):
+        front = ay == by == -hy
+        n = int(math.hypot(bx - ax, by - ay) / 3)
+        for k in range(n + 1):
+            x, y = ax + (bx - ax) * k / n, ay + (by - ay) * k / n
+            if not (front and abs(x) < gate / 2):
+                b.box((0.12, 0.12, 2), (x, y, 0), "stal_ciemna")
+        spans = [((-hx, ay), (-gate / 2, ay)), ((gate / 2, ay), (hx, ay))] if front else [((ax, ay), (bx, by))]
+        for (sx, sy), (ex, ey) in spans:
+            for z in (0.9, 1.8):
+                b.beam((sx, sy, z), (ex, ey, z), 0.08, "stal")
+
+
+def site(layout, key):
+    """Polozenie, obrot i wymiary terenu firmy w ukladzie budynku (przy obrocie o 90 stopni
+    szerokosc i glebokosc zamieniaja sie miejscami, bo obszar w layout.json jest w osiach swiata)."""
+    f = layout["firmy"][key]
+    w, d = f["obszar"]
+    if abs(f["obrot"]) == 90:
+        w, d = d, w
+    return (f["x"], f["y"], 0), f["obrot"], w, d
