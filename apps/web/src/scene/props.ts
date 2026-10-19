@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { Snapshot } from "../sim/protocol.js";
 import type { Daylight } from "../world/daylight.js";
+import { smoothstep } from "../world/smooth.js";
 import { shipOffset } from "../world/traffic.js";
 import { BLOOM_THRESHOLD } from "./stage.js";
 import type { Model } from "./model.js";
@@ -11,7 +12,7 @@ const LAMP = new THREE.Color(0xffc477);
 const WINDOW = new THREE.Color(0xffb35c);
 
 export interface Props {
-  update(snapshot: Snapshot, dayFraction: number, light: Daylight, dt: number, now: number): void;
+  update(snapshot: Snapshot, dayFraction: number, light: Daylight, storm: boolean, dt: number, now: number): void;
 }
 
 /**
@@ -48,7 +49,7 @@ export function createProps(model: Model, scene: THREE.Scene): Props {
 
   let wheelAngle = 0;
   return {
-    update(snapshot, dayFraction, light, dt, now) {
+    update(snapshot, dayFraction, light, storm, dt, now) {
       wheelAngle += WHEEL_SPEED * snapshot.companies.RUD.output * dt;
       for (const w of wheels) w.rotation.z = wheelAngle;
 
@@ -56,7 +57,9 @@ export function createProps(model: Model, scene: THREE.Scene): Props {
       // zwykly dzien to niska halda, a wysoka rosnie dopiero, gdy huta nie odbiera rudy
       for (const [key, heap] of Object.entries(heaps)) {
         const floor = key === "mine" ? 0.55 : 0.25;
-        heap.scale.y = floor + (1 - floor) * snapshot.yards[key as keyof typeof heaps];
+        // w dniu zaladunku stosy w porcie znikaja do 0,3 dnia — dzwigi przenosza je na statek
+        const loading = snapshot.ship === "wyplywa" && (key === "portSteel" || key === "portMachines") ? 1 - smoothstep(0, 0.3, dayFraction) : 1;
+        heap.scale.y = floor + (1 - floor) * snapshot.yards[key as keyof typeof heaps] * loading;
       }
 
       const docked = snapshot.ship === "przy_nabrzezu" || (snapshot.ship === "wyplywa" && dayFraction < 0.3);
@@ -70,7 +73,6 @@ export function createProps(model: Model, scene: THREE.Scene): Props {
       const night = light.lampsOn ? 1 - light.day : 0;
       lamp.emissiveIntensity = night * BLOOM_THRESHOLD * 2.2;
       windows.emissiveIntensity = night * 0.9;
-      const storm = snapshot.incidents.some((i) => i.kind === "SZTORM");
       const blink = (light.lampsOn || storm) && Math.floor(now / 1000) % 4 === 0 ? 1 : 0;
       beacon.intensity = 900 * blink;
       glow.visible = blink === 1;

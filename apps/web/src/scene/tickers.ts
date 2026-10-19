@@ -89,13 +89,17 @@ export function createTickers(model: Model, scene: THREE.Scene): Tickers {
         const g = ledCanvas.getContext("2d") as CanvasRenderingContext2D;
         g.fillStyle = "#000";
         g.fillRect(0, 0, 2048, 64);
-        g.font = "700 40px Consolas, monospace";
         g.textBaseline = "middle";
+        // bez Consolas (Linux, macOS) czcionka zastepcza jest szersza — dopasuj, zeby ostatni kurs sie zmiescil
+        const labels = TICKERS.map((t) => `${t} ${price(snapshot.companies[t].price)}   `);
+        g.font = "700 40px Consolas, monospace";
+        const width = g.measureText(labels.join("")).width;
+        g.font = `700 ${String(Math.floor(40 * Math.min(1, 2008 / width)))}px Consolas, monospace`;
         let x = 20;
-        for (const t of TICKERS) {
+        for (const [i, t] of TICKERS.entries()) {
           const c = snapshot.companies[t];
           g.fillStyle = tone(c.price / c.open - 1);
-          const label = `${t} ${price(c.price)}   `;
+          const label = labels[i] ?? "";
           g.fillText(label, x, 34);
           x += g.measureText(label).width;
         }

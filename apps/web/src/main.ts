@@ -39,7 +39,14 @@ const hud = createHud((s) => {
   send({ type: "speed", speed: s });
 });
 
-const model = await loadModel(import.meta.env.BASE_URL);
+// symulacja rusza od razu, rownolegle z pobieraniem makiety — klikniete w tym czasie tempo nie ginie
+send({ type: "start", seed, speed });
+
+const loading = document.getElementById("ladowanie");
+const model = await loadModel(import.meta.env.BASE_URL).catch((error: unknown) => {
+  if (loading) loading.textContent = `Nie udało się wczytać makiety (${error instanceof Error ? error.message : String(error)}). Odśwież stronę.`;
+  throw error;
+});
 stage.scene.add(model.root);
 const trucks = createTrucks(model, stage.scene);
 const props = createProps(model, stage.scene);
@@ -47,12 +54,10 @@ const tickers = createTickers(model, stage.scene);
 const pickets = createPickets(model, stage.scene);
 const rain = createRain(stage.scene);
 const chimneys = [
-  { smoke: createSmoke(stage.scene, model.anchor("STW_dym_1")), rate: (s: Snapshot) => s.companies.STW.output },
-  { smoke: createSmoke(stage.scene, model.anchor("STW_dym_2")), rate: (s: Snapshot) => s.companies.STW.output },
-  { smoke: createSmoke(stage.scene, model.anchor("MTK_dym")), rate: (s: Snapshot) => s.companies.MTK.output },
+  { smoke: createSmoke(stage.scene, model.anchor("STW_dym_1"), stage.renderer.getPixelRatio()), rate: (s: Snapshot) => s.companies.STW.output },
+  { smoke: createSmoke(stage.scene, model.anchor("STW_dym_2"), stage.renderer.getPixelRatio()), rate: (s: Snapshot) => s.companies.STW.output },
+  { smoke: createSmoke(stage.scene, model.anchor("MTK_dym"), stage.renderer.getPixelRatio()), rate: (s: Snapshot) => s.companies.MTK.output },
 ];
-send({ type: "start", seed, speed });
-
 let previous = performance.now();
 function frame(now: number): void {
   requestAnimationFrame(frame);
@@ -69,7 +74,7 @@ function frame(now: number): void {
     const simDt = dt * snap.speed;
     sky.update(light, storm);
     trucks.update(snap, fraction);
-    props.update(snap, fraction, light, simDt, now);
+    props.update(snap, fraction, light, storm, simDt, now);
     tickers.update(snap, dt, stage.camera, { width: canvas.clientWidth, height: canvas.clientHeight });
     pickets.update(snap, now);
     rain.update(storm, dt);
@@ -80,5 +85,5 @@ function frame(now: number): void {
 }
 requestAnimationFrame(frame);
 
-document.getElementById("ladowanie")?.classList.add("gotowe");
+loading?.classList.add("gotowe");
 document.body.dataset.gotowe = "1";

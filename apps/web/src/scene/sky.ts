@@ -3,6 +3,7 @@ import { Sky } from "three/addons/objects/Sky.js";
 import type { Daylight } from "../world/daylight.js";
 
 const SUN_DISTANCE = 400;
+const ENV_EVERY_MS = 1000;
 const DAY_SUN = 3.2;
 const NIGHT_BLUE = new THREE.Color(0x0b1424);
 const FOG_DAY = new THREE.Color(0xb8c7d6);
@@ -53,7 +54,7 @@ export function createSky(renderer: THREE.WebGLRenderer, scene: THREE.Scene): Sk
   const envSky = new Sky();
   envSky.scale.setScalar(1000);
   envScene.add(envSky);
-  let env: { target: THREE.WebGLRenderTarget; sun: THREE.Vector3; storm: boolean } | undefined;
+  let env: { target: THREE.WebGLRenderTarget; sun: THREE.Vector3; storm: boolean; at: number } | undefined;
 
   return {
     update(light, storm) {
@@ -70,11 +71,14 @@ export function createSky(renderer: THREE.WebGLRenderer, scene: THREE.Scene): Sk
       fog.far = storm ? 700 : 1500;
       scene.background = fog.color;
 
-      // mapa otoczenia: przeliczana, gdy slonce przesunie sie o ~2° albo zmieni sie pogoda
-      if (!env || dir.angleTo(env.sun) > 0.035 || env.storm !== storm) {
+      // mapa otoczenia: przeliczana, gdy slonce przesunie sie o ~2° albo zmieni sie pogoda, ale
+      // najwyzej raz na sekunde — przy 16× slonce rusza sie o 2° w kazdej klatce
+      const now = performance.now();
+      const moved = env && dir.angleTo(env.sun) > 0.035 && now - env.at > ENV_EVERY_MS;
+      if (!env || moved || env.storm !== storm) {
         configure(envSky, dir, storm);
         env?.target.dispose();
-        env = { target: pmrem.fromScene(envScene), sun: dir, storm };
+        env = { target: pmrem.fromScene(envScene, 0, 0.1, 100, { size: 128 }), sun: dir, storm, at: now };
         scene.environment = env.target.texture;
       }
       scene.environmentIntensity = 0.1 + 0.25 * light.day * (storm ? 0.6 : 1);

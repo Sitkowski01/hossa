@@ -37,7 +37,7 @@ const fragment = /* glsl */ `
  * produkcji zakladu — w strajku komin przestaje dymic. Jeden obiekt Points na komin, stala pula
  * czastek bez alokacji w trakcie animacji.
  */
-export function createSmoke(scene: THREE.Scene, origin: THREE.Vector3, size = 5200): Smoke {
+export function createSmoke(scene: THREE.Scene, origin: THREE.Vector3, pixelRatio: number, size = 5200): Smoke {
   const positions = new Float32Array(PARTICLES * 3);
   const ages = new Float32Array(PARTICLES).fill(1);
   const geometry = new THREE.BufferGeometry();
@@ -46,7 +46,7 @@ export function createSmoke(scene: THREE.Scene, origin: THREE.Vector3, size = 52
   const material = new THREE.ShaderMaterial({
     vertexShader: vertex,
     fragmentShader: fragment,
-    uniforms: { size: { value: size }, color: { value: new THREE.Color() } },
+    uniforms: { size: { value: size * pixelRatio }, color: { value: new THREE.Color() } },
     transparent: true,
     depthWrite: false,
   });
@@ -62,7 +62,9 @@ export function createSmoke(scene: THREE.Scene, origin: THREE.Vector3, size = 52
       debt += (rate * PARTICLES * dt) / LIFE;
       while (debt >= 1) {
         debt -= 1;
-        positions.set([origin.x + Math.random() - 0.5, origin.y, origin.z + Math.random() - 0.5], next * 3);
+        positions[next * 3] = origin.x + Math.random() - 0.5;
+        positions[next * 3 + 1] = origin.y;
+        positions[next * 3 + 2] = origin.z + Math.random() - 0.5;
         ages[next] = 0;
         next = (next + 1) % PARTICLES;
       }

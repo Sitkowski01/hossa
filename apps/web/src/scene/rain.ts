@@ -28,7 +28,13 @@ export function createRain(scene: THREE.Scene): Rain {
       heads.forEach((h, i) => {
         h.addScaledVector(SLANT, FALL * dt);
         if (h.y < 0) h.set((Math.random() - 0.5) * AREA.x, AREA.top, (Math.random() - 0.5) * AREA.z);
-        positions.set([h.x, h.y, h.z, h.x - SLANT.x * STREAK, h.y - SLANT.y * STREAK, h.z - SLANT.z * STREAK], i * 6);
+        const k = i * 6;
+        positions[k] = h.x;
+        positions[k + 1] = h.y;
+        positions[k + 2] = h.z;
+        positions[k + 3] = h.x - SLANT.x * STREAK;
+        positions[k + 4] = h.y - SLANT.y * STREAK;
+        positions[k + 5] = h.z - SLANT.z * STREAK;
       });
       (geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
     },
