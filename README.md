@@ -6,17 +6,18 @@ w centrum. Kursy nie są losowane: powstają w prawdziwym arkuszu zleceń, w kt�
 inwestorów reagują na to, co dzieje się na makiecie (strajk, sztorm, wyniki kwartalne,
 decyzja banku centralnego).
 
-> Projekt w budowie. Gotowe są silnik giełdy, gospodarka miasteczka, rynek z botami
-> (na razie w terminalu: `pnpm sesja`) i makieta 3D z Blendera. Scena w przeglądarce
-> i interfejs powstają etapami.
+> Projekt w budowie. Gotowe są silnik giełdy, gospodarka miasteczka, rynek z botami,
+> makieta 3D z Blendera i żywa scena w przeglądarce. Panel spółki z wykresem i arkuszem
+> zleceń powstaje w kolejnym etapie.
 
-![Makieta miasteczka](docs/makieta.jpg)
+![Makieta w przeglądarce](docs/scena.jpg)
 
 ```
 packages/engine    arkusz zleceń (port Parkietu)          zero zależności
 packages/economy   gospodarka miasteczka, zdarzenia, wieści  zero zależności
 packages/market    giełda: arkusze sześciu spółek + boty    engine + economy
 apps/sesja         sesja w terminalu                        market
+apps/web           scena three.js + giełda w Web Workerze   market (tylko w workerze)
 blender/           makieta 3D budowana skryptami Pythona    Blender 5.1
 tools/model        optymalizacja GLB + testy kontraktu      gltf-transform
 ```
@@ -136,6 +137,41 @@ p = r"<repo>/blender/run.py"; exec(compile(open(p, encoding="utf-8").read(), p, 
 pnpm model
 ```
 
+## Scena w przeglądarce (`apps/web`)
+
+Giełda i gospodarka liczą się w Web Workerze, więc boty składające zlecenia nie przycinają
+rysowania. Co 100 ms worker wysyła scenie migawkę: ceny, dzisiejsze wysyłki, zapełnienie
+placów, fazę statku, zdarzenia i wiadomości. Scena nie zna silnika — reguła
+dependency-cruiser zabrania importu rynku poza katalogiem `src/sim`.
+
+Na makiecie widać to, co dzieje się w gospodarce:
+
+- ciężarówki wożą rudę, stal i maszyny trasami z `layout.json` (tymi samymi, po których
+  makietę zbudował Blender); kolumna dnia wynika z ilości towaru,
+- dym z kominów zależy od produkcji, koła wyciągowe kręcą się w tempie wydobycia,
+  zwały rudy i stosy w porcie rosną z zapasami,
+- statek odpływa po załadunku, a w sztorm czeka na redzie; pada deszcz, błyska latarnia,
+- w strajku zakład naprawdę stoi (zero produkcji, brak dymu), a przed bramą stoi pikieta,
+- nad spółkami tabliczki z kursem, a na fasadzie giełdy przewija się pas notowań,
+- jeden dzień gospodarki to doba na makiecie: słońce, noc z oknami i latarniami.
+
+Czas płynie w tempie 1×, 4× albo 16×; między migawkami scena ekstrapoluje go, żeby
+ciężarówki jechały płynnie, ale nie wchodzi w dzień, którego worker jeszcze nie policzył.
+
+Adres strony odtwarza sesję: `?seed=42` (ta sama sesja co do transakcji), `?tempo=16`,
+`?godzina=12` (zatrzymana pora dnia) i `?kamera=x,y,z,celX,celY,celZ`.
+
+**Światło.** Poprzednia makieta była przepalona, więc tu pilnuje tego test: ACES z ekspozycją
+0,75, jedno słońce z cieniami, otoczenie z fizycznego nieba o ograniczonej sile, a poświata
+dopiero powyżej jasności 3 (świecą latarnie i pas LED, nie biały tynk w słońcu). Test e2e
+robi zrzut w południe i w nocy i liczy przepalone piksele.
+
+| Test | Co sprawdza |
+|---|---|
+| jednostkowe + fast-check | trasy (łuki, prawy pas, brak skoków), kolumny ciężarówek, faza statku bez przeskoków między dniami, pora dnia, migawka z prawdziwej sesji (strajk, sztorm, wypadek), parametry adresu |
+| mutacyjne (Stryker) | logika `src/sim` i `src/world`, próg 90% |
+| e2e (Playwright) | scena bez błędów konsoli, tempo i pauza, to samo ziarno = ten sam indeks, ekspozycja w dzień i w nocy, widok na telefonie |
+
 ## Uruchomienie
 
 Wymaga Node 24 i pnpm.
@@ -144,6 +180,8 @@ Wymaga Node 24 i pnpm.
 pnpm install
 pnpm check      # build, typy, lint, reguły architektury, testy z pokryciem
 pnpm mutation   # testy mutacyjne
+pnpm --filter @hossa/web dev   # makieta w przeglądarce (Vite)
+pnpm --filter @hossa/web e2e   # testy e2e (po pnpm build)
 ```
 
 Ponowne nagranie przebiegów z Parkietu (Java 21, klasy po `./gradlew classes` w repo Parkietu):
