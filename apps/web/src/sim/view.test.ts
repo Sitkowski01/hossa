@@ -1,6 +1,7 @@
 import { TECH, TICKERS, type EconomicEvent } from "@hossa/economy";
 import { Session } from "@hossa/market";
 import { describe, expect, it } from "vitest";
+import type { ShipPhase } from "../world/traffic.js";
 import { SimClock } from "./clock.js";
 import type { Snapshot } from "./protocol.js";
 import { Observer, yards } from "./view.js";
@@ -85,6 +86,39 @@ describe("Observer — sesja w toku", () => {
     const out = phases.indexOf("wyplywa");
     expect(out).toBeGreaterThanOrEqual(0);
     expect(phases[out + 1]).toBe("wraca");
+  });
+});
+
+describe("Observer — zdarzenia na makiecie", () => {
+  it("strajk w kopalni zatrzymuje produkcje i trafia na liste zdarzen", () => {
+    const shots = run(7, 4, { 1: { kind: "STRAJK", ticker: "RUD", days: 10 } });
+    const day3 = lastOfDay(shots, 3);
+    expect(day3.companies.RUD.output).toBe(0);
+    expect(day3.companies.STW.output).toBeGreaterThan(0);
+    const strikeNow = day3.incidents.find((i) => i.kind === "STRAJK");
+    expect(strikeNow).toMatchObject({ ticker: "RUD" });
+    const strikeBefore = lastOfDay(shots, 2).incidents.find((i) => i.kind === "STRAJK");
+    // dzien pozniej strajk ma o dzien mniej do konca
+    expect(strikeNow?.daysLeft).toBe((strikeBefore?.daysLeft ?? Number.NaN) - 1);
+    const strike = day3.news.find((n) => n.text.includes("Strajk"));
+    expect(strike?.tone).toBeLessThan(0);
+  });
+
+  it("w sztorm statek czeka na redzie, a po sztormie wraca do portu", () => {
+    const shots = run(3, 9, { 1: { kind: "SZTORM", ticker: "BPT", days: 4 } });
+    const phases: ShipPhase[] = Array.from({ length: 9 }, (_, d) => lastOfDay(shots, d + 1).ship);
+    expect(phases.slice(1, 4)).toEqual(["wyplywa", "na_redzie", "na_redzie"]);
+    expect(phases).toContain("wraca");
+    expect(lastOfDay(shots, 3).companies.BPT.output).toBe(1);
+  });
+});
+
+describe("Observer — zdarzenia bez spolki", () => {
+  it("decyzja o stopach bez zmiany ma neutralny wydzwiek, a zdarzenie bez spolki nie ma tickera", () => {
+    const shots = run(5, 3, { 1: { kind: "STOPY", days: 1, size: 0 }, 2: { kind: "NASTROJE", days: 5 } });
+    const last = shots.at(-1) as Snapshot;
+    expect(last.news.find((n) => n.text.includes("utrzymuje"))?.tone).toBe(0);
+    expect(last.incidents).toContainEqual({ kind: "NASTROJE", daysLeft: 5 });
   });
 });
 
