@@ -1,4 +1,4 @@
-# Hossa
+# Hossa: miasteczko na giełdzie
 
 Żywa makieta gospodarki połączona z giełdą. Miasteczko w 3D — kopalnia, huta, fabryka, port,
 sieć sklepów i bank — produkuje i handluje samo, a każda z tych firm jest notowana na giełdzie
