@@ -10,9 +10,16 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "check": "pnpm build && pnpm typecheck && pnpm test"
+    "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm arch && pnpm test",
+    "lint": "eslint .",
+    "arch": "depcruise packages --config .dependency-cruiser.cjs"
   },
   "devDependencies": {
-    "typescript": "6.0.3"
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
+    "dependency-cruiser": "18.6.0",
+    "eslint": "10.12.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1"
   }
 }
