@@ -1,6 +1,6 @@
 import { Rng, type News } from "@hossa/economy";
 import { describe, expect, it } from "vitest";
-import { Fundamental, MarketMaker, NewsTrader, type BotContext } from "./bots.js";
+import { Fundamental, MarketMaker, Momentum, NewsTrader, NoiseTrader, crowdFor, type BotContext } from "./bots.js";
 import { OrderIds, SymbolMarket, type Trader } from "./symbol-market.js";
 
 const ctx = (market: SymbolMarket, fair = 3000, step = 0): BotContext => ({ market, step, stepsPerDay: 20, fair: () => fair });
@@ -128,5 +128,81 @@ describe("NewsTrader", () => {
     bot.onNews(0.5, news(1));
     bot.act(ctx(m));
     expect(bot.account.position).toBeGreaterThan(0);
+  });
+});
+
+describe("Momentum and NoiseTrader", () => {
+  it("momentum follows a strong move and sits out a flat market", () => {
+    const up = new SymbolMarket("RUD", 3000, new OrderIds());
+    up.submit(other(), "SELL", "LIMIT", 3300, 100_000);
+    up.endStep();
+    up.last = 3200;
+    const flat = new SymbolMarket("RUD", 3000, new OrderIds());
+    flat.submit(other(), "SELL", "LIMIT", 3010, 100_000);
+    flat.endStep();
+    const bot = new Momentum("mo", rng(5));
+    const calm = new Momentum("mo2", rng(5));
+    for (let i = 0; i < 30; i++) {
+      bot.act(ctx(up));
+      calm.act(ctx(flat));
+    }
+    expect(bot.account.position).toBeGreaterThan(0);
+    expect(calm.account.position).toBe(0);
+  });
+
+  it("noise places small orders near the price and cancels old ones", () => {
+    const m = new SymbolMarket("RUD", 3000, new OrderIds());
+    const bot = new NoiseTrader("no", rng(4));
+    for (let step = 0; step < 30; step++) bot.act(ctx(m, 3000, step));
+    expect(bot.resting.size).toBeGreaterThan(5);
+    for (const o of m.book.snapshot().orders) expect(Math.abs(o.price - 3000)).toBeLessThanOrEqual(45);
+    bot.act(ctx(m, 3000, 100));
+    expect(bot.resting.size).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("review fixes stay fixed", () => {
+  it("noise trader forgets orders that others filled, so its memory does not grow", () => {
+    const m = new SymbolMarket("RUD", 3000, new OrderIds());
+    const bot = new NoiseTrader("no", rng(6));
+    const sweeper = other();
+    for (let step = 0; step < 400; step++) {
+      bot.act(ctx(m, 3000, step));
+      m.submit(sweeper, "BUY", "MARKET", 0, 10_000);
+      m.submit(sweeper, "SELL", "MARKET", 0, 10_000);
+    }
+    const placed = (bot as unknown as { placed: Map<number, number> }).placed;
+    expect(placed.size).toBeLessThanOrEqual(bot.resting.size + 1);
+  });
+
+  it("momentum looks back three days, whatever the number of steps per day", () => {
+    // osobne rynki: zakup jednego bota zmienilby cene widziana przez drugiego
+    const market = () => {
+      const m = new SymbolMarket("RUD", 3000, new OrderIds());
+      m.submit(other(), "SELL", "LIMIT", 3300, 100_000);
+      for (let i = 0; i < 30; i++) m.endStep(); // 30 krokow po 3000
+      m.last = 3200;
+      for (let i = 0; i < 31; i++) m.endStep(); // 31 krokow po 3200
+      return m;
+    };
+    const short = new Momentum("a", rng(7));
+    const long = new Momentum("b", rng(7));
+    const ms = market();
+    const ml = market();
+    for (let i = 0; i < 40; i++) {
+      short.act({ market: ms, step: 0, stepsPerDay: 10, fair: () => 3000 }); // 30 krokow wstecz: 3200 -> bez sygnalu
+      long.act({ market: ml, step: 0, stepsPerDay: 20, fair: () => 3000 }); // 60 krokow wstecz: 3000 -> wzrost
+    }
+    expect(short.account.position).toBe(0);
+    expect(long.account.position).toBeGreaterThan(0);
+  });
+});
+
+describe("crowdFor", () => {
+  it("staffs every company with the same mix of traders", () => {
+    expect(crowdFor("STW", new Rng(1)).map((b) => b.kind)).toEqual([
+      "animator", "fundamentalny", "fundamentalny", "fundamentalny", "newsowy", "momentum", "losowy", "losowy",
+    ]);
+    expect(crowdFor("STW", new Rng(1))[0]?.id).toBe("STW-animator");
   });
 });
