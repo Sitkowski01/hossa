@@ -37,6 +37,15 @@ export class Rng {
     return items[Math.floor(this.next() * items.length)] as T;
   }
 
+  /** Tasowanie Fishera-Yatesa w miejscu: kazda kolejnosc rownie prawdopodobna. */
+  shuffle<T>(items: T[]): T[] {
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = this.int(0, i);
+      [items[i], items[j]] = [items[j] as T, items[i] as T];
+    }
+    return items;
+  }
+
   /** Ziarno dla niezaleznego podsystemu (np. gospodarki w sesji). */
   nextSeed(): number {
     return Math.floor(this.next() * 4294967296);

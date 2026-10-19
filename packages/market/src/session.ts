@@ -77,12 +77,7 @@ export class Session {
         fair: (lag: number) => history[Math.max(0, history.length - 1 - lag)] as number,
       };
       // kolejnosc graczy losowana co krok, zeby nikt nie mial stalego pierwszenstwa
-      const crowd = [...this.bots[t]];
-      for (let i = crowd.length - 1; i > 0; i--) {
-        const j = this.rng.int(0, i);
-        [crowd[i], crowd[j]] = [crowd[j] as Bot, crowd[i] as Bot];
-      }
-      for (const bot of crowd) bot.act(ctx);
+      for (const bot of this.rng.shuffle([...this.bots[t]])) bot.act(ctx);
       market.endStep();
     }
     this.step += 1;

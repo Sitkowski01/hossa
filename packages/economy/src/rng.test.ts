@@ -44,6 +44,19 @@ describe("Rng", () => {
     expect(() => r.pick([])).toThrow(/empty list/);
   });
 
+  it("shuffles in place, keeping every element, into varying orders", () => {
+    const r = new Rng(8);
+    const orders = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const items = [1, 2, 3, 4];
+      expect(r.shuffle(items)).toBe(items);
+      expect([...items].sort()).toEqual([1, 2, 3, 4]);
+      orders.add(items.join(""));
+    }
+    expect(orders.size).toBe(24); // wszystkie 4! kolejnosci
+    expect(new Rng(1).shuffle([])).toEqual([]);
+  });
+
   it("forks an independent stream", () => {
     const parent = new Rng(5);
     const child = parent.fork();
