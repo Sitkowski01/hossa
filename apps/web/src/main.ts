@@ -3,6 +3,7 @@ import { dayFraction, extrapolate } from "./sim/clock.js";
 import { loadModel } from "./scene/model.js";
 import { createPickets } from "./scene/pickets.js";
 import { createProps } from "./scene/props.js";
+import { createRain } from "./scene/rain.js";
 import { createSky } from "./scene/sky.js";
 import { createSmoke } from "./scene/smoke.js";
 import { createStage } from "./scene/stage.js";
@@ -52,6 +53,7 @@ const trucks = createTrucks(model, stage.scene);
 const props = createProps(model, stage.scene);
 const tickers = createTickers(model, stage.scene);
 const pickets = createPickets(model, stage.scene);
+const rain = createRain(stage.scene);
 const chimneys = [
   { smoke: createSmoke(stage.scene, model.anchor("STW_dym_1")), rate: (s: Snapshot) => s.companies.STW.output },
   { smoke: createSmoke(stage.scene, model.anchor("STW_dym_2")), rate: (s: Snapshot) => s.companies.STW.output },
@@ -78,6 +80,7 @@ function frame(now: number): void {
     props.update(snap, fraction, light, simDt, now);
     tickers.update(snap, dt);
     pickets.update(snap, now);
+    rain.update(storm, dt);
     for (const c of chimneys) c.smoke.update(c.rate(snap), simDt, light.day);
     hud.update(snap, hour);
   }
