@@ -10,9 +10,10 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm arch && pnpm test",
     "lint": "eslint .",
-    "arch": "depcruise packages --config .dependency-cruiser.cjs"
+    "arch": "depcruise packages --config .dependency-cruiser.cjs",
+    "mutation": "pnpm -r --workspace-concurrency=1 mutation",
+    "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm arch && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
