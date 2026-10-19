@@ -6,7 +6,8 @@
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
     "noEmit": true,
-    "declaration": false
+    "declaration": false,
+    "resolveJsonModule": true
   },
   "include": ["src", "e2e"]
 }
