@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
     "e2e": "playwright test"
   },
   "dependencies": {
