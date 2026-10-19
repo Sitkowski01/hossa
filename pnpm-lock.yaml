@@ -69,6 +69,34 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.19.2)(@vitest/coverage-v8@4.1.11)(vite@8.3.4(@types/node@24.19.2))
 
+  packages/market:
+    dependencies:
+      '@hossa/economy':
+        specifier: workspace:*
+        version: link:../economy
+      '@hossa/engine':
+        specifier: workspace:*
+        version: link:../engine
+    devDependencies:
+      '@stryker-mutator/core':
+        specifier: 10.0.0
+        version: 10.0.0(@types/node@24.19.2)
+      '@stryker-mutator/typescript-checker':
+        specifier: 10.0.0
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@24.19.2))(typescript@6.0.3)
+      '@stryker-mutator/vitest-runner':
+        specifier: 10.0.0
+        version: 10.0.0(@stryker-mutator/core@10.0.0(@types/node@24.19.2))(vitest@4.1.11)
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      fast-check:
+        specifier: 4.10.2
+        version: 4.10.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.19.2)(@vitest/coverage-v8@4.1.11)(vite@8.3.4(@types/node@24.19.2))
+
 packages:
 
   '@babel/code-frame@8.0.6':
