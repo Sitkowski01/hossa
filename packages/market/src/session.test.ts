@@ -1,4 +1,4 @@
-import { TICKERS, type EconomicEvent, type Ticker } from "@hossa/economy";
+import { COMPANIES, TICKERS, type EconomicEvent, type Ticker } from "@hossa/economy";
 import { describe, expect, it } from "vitest";
 import { Session } from "./session.js";
 
@@ -53,6 +53,15 @@ describe("Session", () => {
       }
       expect(candles.reduce((v, c) => v + c.volume, 0)).toBeGreaterThan(500); // jest handel, nie tylko kwotowania
     }
+  });
+
+  it("moves the index with market capitalisation", () => {
+    const s = new Session({ seed: 14 });
+    const cap = () => TICKERS.reduce((sum, t) => sum + s.markets[t].last * COMPANIES[t].shares, 0);
+    const start = cap();
+    s.runDays(30);
+    expect(s.index()).toBeCloseTo((1000 * cap()) / start, 6);
+    expect(s.indexHistory.at(-1)).toBeCloseTo(s.index(), 6);
   });
 
   it("starts the town index at 1000 and passes news to the traders", () => {
