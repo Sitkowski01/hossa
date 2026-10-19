@@ -17,6 +17,27 @@ module.exports = {
       to: { dependencyTypes: ["core"] },
     },
     {
+      name: "gospodarka-samodzielna",
+      comment: "packages/economy to czysta symulacja miasteczka: nie zna gieldy, Node ani zadnych pakietow npm",
+      severity: "error",
+      from: { path: "^packages/economy/src", pathNot: "(\\.test\\.ts$|/src/test/)" },
+      to: { path: "^(packages/(?!economy)|apps/|node_modules/)", dependencyTypes: ["core", "npm", "npm-dev", "npm-optional", "npm-peer", "npm-no-pkg", "npm-unknown", "local"] },
+    },
+    {
+      name: "rynek-tylko-na-silniku-i-gospodarce",
+      comment: "packages/market laczy silnik z gospodarka; bez Node i bez innych zaleznosci — pojdzie do Web Workera",
+      severity: "error",
+      from: { path: "^packages/market/src", pathNot: "(\\.test\\.ts$|/src/test/)" },
+      to: { path: "^(packages/(?!market|engine|economy)|apps/|node_modules/(?!@hossa/(engine|economy)))", dependencyTypes: ["core", "npm", "npm-dev", "npm-optional", "npm-peer", "npm-no-pkg", "npm-unknown", "local"] },
+    },
+    {
+      name: "gospodarka-i-rynek-bez-modulow-node",
+      comment: "gospodarka i rynek pojda do Web Workera — zadnych modulow Node (sciezki core nie pasuja do regul wyzej)",
+      severity: "error",
+      from: { path: "^packages/(economy|market)/src", pathNot: "(\\.test\\.ts$|/src/test/)" },
+      to: { dependencyTypes: ["core"] },
+    },
+    {
       name: "pakiety-nie-znaja-aplikacji",
       comment: "biblioteki w packages/ nie importuja z apps/",
       severity: "error",

@@ -27,6 +27,19 @@ importers:
         specifier: 8.71.1
         version: 8.71.1(eslint@10.12.0)(typescript@6.0.3)
 
+  apps/sesja:
+    dependencies:
+      '@hossa/economy':
+        specifier: workspace:*
+        version: link:../../packages/economy
+      '@hossa/market':
+        specifier: workspace:*
+        version: link:../../packages/market
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.2
+        version: 24.19.2
+
   packages/economy:
     devDependencies:
       '@stryker-mutator/core':
