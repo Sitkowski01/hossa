@@ -52,3 +52,14 @@ export function shipOffset(phase: ShipPhase, dayFraction: number): number {
       return 1 - smooth(dayFraction / 0.5);
   }
 }
+
+/**
+ * Faza statku na kolejny dzien. Pilnuje ciaglosci: dzien zaczyna sie tam, gdzie skonczyl
+ * poprzedni (na redzie po odplynieciu albo przeczekaniu sztormu, inaczej przy nabrzezu).
+ */
+export function nextShipPhase(previous: ShipPhase, storm: boolean, loaded: boolean): ShipPhase {
+  const atSea = previous === "wyplywa" || previous === "na_redzie";
+  if (storm) return atSea ? "na_redzie" : "wyplywa";
+  if (atSea) return "wraca";
+  return loaded ? "wyplywa" : "przy_nabrzezu";
+}

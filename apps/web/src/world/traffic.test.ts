@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { MAX_TRUCKS, TRUCK_LOAD, convoy, departures, shipOffset, type ShipPhase } from "./traffic.js";
+import { MAX_TRUCKS, TRUCK_LOAD, convoy, departures, nextShipPhase, shipOffset, type ShipPhase } from "./traffic.js";
 
 describe("convoy", () => {
   it("jeden maly ladunek to jedna ciezarowka, ktora rusza rano i jedzie 0,4 dnia", () => {
@@ -70,5 +70,34 @@ describe("shipOffset", () => {
   it("ruch jest plynny: rusza i hamuje lagodnie", () => {
     expect(at("wyplywa", 0.32)).toBeLessThan(0.01);
     expect(at("wyplywa", 0.78)).toBeGreaterThan(0.99);
+  });
+});
+
+describe("nextShipPhase", () => {
+  it("dzien zaladunku: statek odplywa, a nastepnego ranka wplywa nowy", () => {
+    expect(nextShipPhase("przy_nabrzezu", false, true)).toBe("wyplywa");
+    expect(nextShipPhase("wyplywa", false, false)).toBe("wraca");
+    expect(nextShipPhase("wraca", false, false)).toBe("przy_nabrzezu");
+  });
+
+  it("sztorm wygania statek na rede i trzyma go tam, a po sztormie statek wraca", () => {
+    expect(nextShipPhase("przy_nabrzezu", true, false)).toBe("wyplywa");
+    expect(nextShipPhase("wyplywa", true, false)).toBe("na_redzie");
+    expect(nextShipPhase("na_redzie", true, false)).toBe("na_redzie");
+    expect(nextShipPhase("na_redzie", false, true)).toBe("wraca");
+  });
+
+  it("wlasnosc: statek nigdy nie przeskakuje miedzy dniami", () => {
+    const phases: ShipPhase[] = ["przy_nabrzezu", "wyplywa", "wraca", "na_redzie"];
+    fc.assert(
+      fc.property(fc.constantFrom(...phases), fc.array(fc.tuple(fc.boolean(), fc.boolean()), { maxLength: 30 }), (start, days) => {
+        let phase = start;
+        for (const [storm, loaded] of days) {
+          const next = nextShipPhase(phase, storm, loaded);
+          expect(shipOffset(next, 0)).toBe(shipOffset(phase, 1));
+          phase = next;
+        }
+      }),
+    );
   });
 });
