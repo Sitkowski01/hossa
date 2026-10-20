@@ -18,7 +18,7 @@ describe("readParams", () => {
     expect(readParams("?seed=0&tempo=0&godzina=0", random)).toEqual({ seed: 0, speed: 0, hour: 0 });
   });
 
-  it.each(["abc", "-1", "1.5", "2147483648", ""])("zle ziarno %j zastepuje losowym", (seed) => {
+  it.each(["abc", "-1", "1.5", "2147483648", "", "  "])("zle ziarno %j zastepuje losowym", (seed) => {
     expect(readParams(`?seed=${seed}`, random).seed).toBe(500_000);
   });
 

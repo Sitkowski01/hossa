@@ -182,7 +182,8 @@ describe("loadingDay", () => {
   });
 
   it("w dniu zaladunku pokazuje w porcie to, co zabiera statek", () => {
-    expect(loadingDay(empty, { steel: 1750, machines: 2000 })).toEqual({ ...empty, portSteel: 0.5, portMachines: 1 });
+    expect(loadingDay(empty, { steel: 1750, machines: 250 })).toEqual({ ...empty, portSteel: 0.5, portMachines: 0.25 });
+    expect(loadingDay(empty, { steel: 9000, machines: 2000 })).toEqual({ ...empty, portSteel: 1, portMachines: 1 });
   });
 });
 
