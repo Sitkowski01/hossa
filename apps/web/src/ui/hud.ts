@@ -1,5 +1,6 @@
 import { SPEEDS, type Snapshot, type Speed } from "../sim/protocol.js";
-import { change } from "../world/format.js";
+import { change, trend } from "../world/format.js";
+import { setData, setPressed, setText } from "./dom.js";
 
 export interface Hud {
   update(snapshot: Snapshot, hour: number): void;
@@ -38,11 +39,11 @@ export function createHud(onSpeed: (speed: Speed) => void): Hud {
     update(snapshot, hour) {
       const h = Math.floor(hour);
       const m = Math.floor((hour - h) * 60);
-      time.textContent = `Dzień ${String(snapshot.day)} · ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      setText(time, `Dzień ${String(snapshot.day)} · ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
       const pct = snapshot.index / snapshot.indexOpen - 1;
-      index.textContent = `Indeks ${snapshot.index.toFixed(1).replace(".", ",")} (${change(pct)})`;
-      index.dataset.kierunek = pct > 0 ? "wzrost" : pct < 0 ? "spadek" : "";
-      for (const { speed, button } of buttons) button.setAttribute("aria-pressed", String(speed === snapshot.speed));
+      setText(index, `Indeks ${snapshot.index.toFixed(1).replace(".", ",")} (${change(pct)})`);
+      setData(index, "kierunek", trend(pct));
+      for (const { speed, button } of buttons) setPressed(button, speed === snapshot.speed);
     },
   };
 }
