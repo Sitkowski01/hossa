@@ -1,17 +1,18 @@
-import type { Ticker } from "@hossa/economy";
 import * as THREE from "three";
 import type { Snapshot } from "../sim/protocol.js";
+import { TICKERS } from "../world/companies.js";
 import { change, price } from "../world/format.js";
 import { BLOOM_THRESHOLD } from "./stage.js";
 import type { Model } from "./model.js";
 
-const TICKERS: readonly Ticker[] = ["RUD", "STW", "MTK", "BPT", "KSZ", "GRS"];
 const UP = "#2fbf71";
 const DOWN = "#e5484d";
 const FLAT = "#93a4bb";
 const SIGN_PX = 130;
 
 export interface Tickers {
+  /** Tabliczki nad spolkami — klikalne jak budynki (userData.ticker). */
+  readonly signs: readonly THREE.Sprite[];
   update(snapshot: Snapshot, dt: number, camera: THREE.PerspectiveCamera, viewport: { width: number; height: number }): void;
 }
 
@@ -32,6 +33,7 @@ export function createTickers(model: Model, scene: THREE.Scene): Tickers {
     // stala wielkosc na ekranie: tabliczka ma byc czytelna z kazdej odleglosci
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, toneMapped: false, sizeAttenuation: false }));
     sprite.renderOrder = 10;
+    sprite.userData = { ticker: t };
     sprite.position.copy(model.anchor(`${t}_kurs`)).add(new THREE.Vector3(0, 4, 0));
     scene.add(sprite);
     return { ticker: t, sprite, canvas, texture, text: "" };
@@ -49,6 +51,7 @@ export function createTickers(model: Model, scene: THREE.Scene): Tickers {
   let ledText = "";
 
   return {
+    signs: signs.map((s) => s.sprite),
     update(snapshot, dt, camera, viewport) {
       // sprite bez perspektywy ma wielkosc w jednostkach wysokosci ekranu, podzielona przez
       // tan(fov/2); liczymy ja z szerokosci w pikselach, zeby tabliczka byla tak samo czytelna
