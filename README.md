@@ -158,8 +158,27 @@ Na makiecie widać to, co dzieje się w gospodarce:
 Czas płynie w tempie 1×, 4× albo 16×; między migawkami scena ekstrapoluje go, żeby
 ciężarówki jechały płynnie, ale nie wchodzi w dzień, którego worker jeszcze nie policzył.
 
+**Panel spółki.** Klik w zakład, w tabliczkę z kursem, w notowanie z tablicy albo w wiadomość
+otwiera panel spółki, a kamera podlatuje do budynku. Obraz przesuwa się (`setViewOffset`)
+tak, żeby zakład stał na środku tej części ekranu, której panel nie zasłania. Panel pokazuje:
+
+- wykres świecowy z ostatnich trzech dni (świeca = jeden krok giełdy) z linią wartości godziwej,
+  do której ciągną gracze fundamentalni,
+- arkusz zleceń: osiem poziomów po każdej stronie z paskami wielkości i spreadem,
+- taśmę transakcji ze stroną agresora,
+- fundamenty z ksiąg gospodarki: kapitalizacja, C/Z, roczny zysk w obecnym tempie, ostatni
+  kwartał, gotówka, dług, kurs względem wyceny,
+- wiadomości o spółce z wydźwiękiem dla niej (strajk w kopalni to dla kopalni −0,8, dla fabryki −0,1).
+
+Worker liczy te szczegóły tylko dla otwartej spółki (wiadomość `focus`), więc zamknięty panel
+nic nie kosztuje. UI niczego nie liczy: formatowanie i układ wykresu to czyste funkcje
+w `src/world` (testy i mutacje), a DOM jest aktualizowany w miejscu — te same węzły, zmienia się
+tylko tekst, więc 10 migawek na sekundę nie gubi zaznaczenia ani miejsca czytnika ekranu.
+Na telefonie panel wysuwa się od dołu, a tablica notowań przewija się w poziomie.
+
 Adres strony odtwarza sesję: `?seed=42` (ta sama sesja co do transakcji), `?tempo=16`,
-`?godzina=12` (zatrzymana pora dnia) i `?kamera=x,y,z,celX,celY,celZ`.
+`?godzina=12` (zatrzymana pora dnia), `?kamera=x,y,z,celX,celY,celZ` i `?spolka=RUD`
+(otwarty panel spółki — np. `?seed=79&spolka=RUD` to strajk w kopalni drugiego dnia).
 
 **Światło.** Poprzednia makieta była przepalona, więc tu pilnuje tego test: ACES z ekspozycją
 0,75, jedno słońce z cieniami, otoczenie z fizycznego nieba o ograniczonej sile, a poświata
@@ -168,9 +187,9 @@ robi zrzut w południe i w nocy i liczy przepalone piksele.
 
 | Test | Co sprawdza |
 |---|---|
-| jednostkowe + fast-check | trasy (łuki, prawy pas, brak skoków), kolumny ciężarówek, faza statku bez przeskoków między dniami, pora dnia, migawka z prawdziwej sesji (strajk, sztorm, wypadek), parametry adresu |
+| jednostkowe + fast-check | trasy (łuki, prawy pas, brak skoków), kolumny ciężarówek, faza statku bez przeskoków między dniami, pora dnia, migawka z prawdziwej sesji (strajk, sztorm, wypadek), szczegóły spółki (świece, arkusz, taśma, fundamenty, wiadomości), układ wykresu (każda świeca mieści się w polu), przelot kamery, parametry adresu |
 | mutacyjne (Stryker) | logika `src/sim` i `src/world`, próg 90% |
-| e2e (Playwright) | scena bez błędów konsoli, tempo i pauza, to samo ziarno = ten sam indeks, ekspozycja w dzień i w nocy, widok na telefonie |
+| e2e (Playwright) | scena bez błędów konsoli, tempo i pauza, to samo ziarno = ten sam indeks, ekspozycja w dzień i w nocy, panel z notowania, z kliknięcia w budynek i z adresu (strajk), Escape i powrót fokusu, pasek wiadomości, panel od dołu na telefonie |
 
 ## Uruchomienie
 
