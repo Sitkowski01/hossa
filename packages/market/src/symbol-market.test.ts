@@ -94,3 +94,66 @@ describe("SymbolMarket", () => {
     expect(m.history.length).toBe(400);
   });
 });
+
+describe("SymbolMarket bars and tape", () => {
+  it("closes one candle per step that opens at the previous close", () => {
+    const m = new SymbolMarket("RUD", 3000, new OrderIds());
+    const a = trader("a");
+    const b = trader("b");
+    m.openDay(1);
+    m.submit(a, "SELL", "LIMIT", 3050, 2);
+    m.submit(b, "BUY", "MARKET", 0, 2);
+    m.endStep();
+    m.endStep(); // krok bez transakcji: plaska swieca po ostatniej cenie
+    m.openDay(2);
+    m.submit(a, "BUY", "LIMIT", 2950, 1);
+    m.submit(b, "SELL", "MARKET", 0, 1);
+    m.endStep();
+    expect(m.bars).toEqual([
+      { day: 1, open: 3000, high: 3050, low: 3000, close: 3050, volume: 2 },
+      { day: 1, open: 3050, high: 3050, low: 3050, close: 3050, volume: 0 },
+      { day: 2, open: 3050, high: 3050, low: 2950, close: 2950, volume: 1 },
+    ]);
+  });
+
+  it("a trade before the first day still lands in the step candle", () => {
+    const m = new SymbolMarket("RUD", 3000, new OrderIds());
+    m.submit(trader("a"), "SELL", "LIMIT", 3020, 4);
+    m.submit(trader("b"), "BUY", "MARKET", 0, 4);
+    m.endStep();
+    expect(m.candles).toEqual([]);
+    expect(m.bars).toEqual([{ day: 0, open: 3000, high: 3020, low: 3000, close: 3020, volume: 4 }]);
+  });
+
+  it("keeps the last 400 bars", () => {
+    const m = new SymbolMarket("RUD", 3000, new OrderIds());
+    for (let i = 0; i < 401; i++) {
+      m.last = 3000 + 5 * i;
+      m.endStep();
+    }
+    expect(m.bars.length).toBe(400);
+    // swieca otwiera sie po cenie z konca poprzedniego kroku, a recznie ustawiona cena nie jest transakcja
+    expect(m.bars[0]?.open).toBe(3000);
+  });
+
+  it("prints every trade with the aggressor side and keeps the last 40", () => {
+    const m = new SymbolMarket("RUD", 3000, new OrderIds());
+    const a = trader("a");
+    const b = trader("b");
+    m.submit(a, "SELL", "LIMIT", 3010, 3);
+    m.submit(b, "BUY", "MARKET", 0, 3);
+    m.submit(a, "BUY", "LIMIT", 2990, 2);
+    m.submit(b, "SELL", "LIMIT", 2990, 2);
+    expect(m.tape).toEqual([
+      { seq: 1, price: 3010, quantity: 3, side: "BUY" },
+      { seq: 2, price: 2990, quantity: 2, side: "SELL" },
+    ]);
+    for (let i = 0; i < 50; i++) {
+      m.submit(a, "SELL", "LIMIT", 3000, 1);
+      m.submit(b, "BUY", "MARKET", 0, 1);
+    }
+    expect(m.tape.length).toBe(40);
+    expect(m.tape.at(-1)?.seq).toBe(52);
+    expect(m.tape[0]?.seq).toBe(13);
+  });
+});

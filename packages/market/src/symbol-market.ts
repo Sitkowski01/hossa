@@ -37,7 +37,17 @@ export class OrderIds {
   }
 }
 
+/** Transakcja z tasmy: po jakiej cenie, ile i kto byl agresorem (strona zlecenia, ktore ja wywolalo). */
+export interface Print {
+  /** Kolejny numer transakcji w tym rynku — UI po nim poznaje, ktore sa nowe. */
+  readonly seq: number;
+  readonly price: number;
+  readonly quantity: number;
+  readonly side: Side;
+}
+
 const HISTORY = 400;
+const TAPE = 40;
 
 /**
  * Rynek jednej spolki: arkusz z silnika plus ksiegowosc graczy. Kazda transakcja przenosi akcje
@@ -49,10 +59,16 @@ export class SymbolMarket {
   /** Ostatnia cena po kazdym kroku (do momentum i zmiennosci). */
   readonly history: number[] = [];
   readonly candles: Candle[] = [];
+  /** Swieca kazdego kroku (ostatnie 400) — do wykresu w ciagu dnia, bo dzienna rosnie zbyt wolno. */
+  readonly bars: Candle[] = [];
+  /** Ostatnie transakcje, najnowsza na koncu. */
+  readonly tape: Print[] = [];
   /** Srednia wykladnicza |zmiany ceny| na krok — miara nerwowosci rynku. */
   volatility = 0;
   /** Czekajace zlecenia graczy: kto zlozyl i ile jeszcze zostalo do realizacji. */
   private readonly owners = new Map<number, { trader: Trader; remaining: number }>();
+  private bar: Candle;
+  private printed = 0;
 
   constructor(
     readonly ticker: Ticker,
@@ -60,6 +76,7 @@ export class SymbolMarket {
     private readonly ids: OrderIds,
   ) {
     this.last = roundTick(start);
+    this.bar = this.freshCandle(0);
   }
 
   /** Zlecenie gracza. Cena i ilosc sa przycinane do limitow silnika; zwraca zdarzenia arkusza. */
@@ -100,10 +117,14 @@ export class SymbolMarket {
     this.history.push(this.last);
     if (this.history.length > HISTORY) this.history.shift();
     this.volatility += (Math.abs(this.last / prev - 1) - this.volatility) / 20;
+    this.bars.push(this.bar);
+    if (this.bars.length > HISTORY) this.bars.shift();
+    this.bar = this.freshCandle(this.bar.day);
   }
 
   openDay(day: number): void {
-    this.candles.push({ day, open: this.last, high: this.last, low: this.last, close: this.last, volume: 0 });
+    this.candles.push(this.freshCandle(day));
+    this.bar = { ...this.bar, day };
   }
 
   /** Cena sprzed `steps` krokow (albo najstarsza znana). */
@@ -125,12 +146,19 @@ export class SymbolMarket {
     seller.account.position -= quantity;
     seller.account.cash += price * quantity;
     this.last = price;
-    const c = this.candles.at(-1);
-    if (c) {
+    this.printed += 1;
+    this.tape.push({ seq: this.printed, price, quantity, side: takerSide });
+    if (this.tape.length > TAPE) this.tape.shift();
+    const day = this.candles.at(-1);
+    for (const c of day ? [day, this.bar] : [this.bar]) {
       c.high = Math.max(c.high, price);
       c.low = Math.min(c.low, price);
       c.close = price;
       c.volume += quantity;
     }
+  }
+
+  private freshCandle(day: number): Candle {
+    return { day, open: this.last, high: this.last, low: this.last, close: this.last, volume: 0 };
   }
 }
