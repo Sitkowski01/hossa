@@ -38,6 +38,15 @@ describe("readParams", () => {
     expect(readParams(`?kamera=${view}`, random)).not.toHaveProperty("camera");
   });
 
+  it("otwiera panel spolki z adresu, takze pisanej malymi literami", () => {
+    expect(readParams("?spolka=STW", random).company).toBe("STW");
+    expect(readParams("?spolka=grs", random).company).toBe("GRS");
+  });
+
+  it.each(["", "XYZ", "STW_suwnica", "RUD_", "GIELDA"])("spolka %j spoza listy jest pomijana", (name) => {
+    expect(readParams(`?spolka=${name}`, random)).not.toHaveProperty("company");
+  });
+
   it("godzina tuz przed polnoca przechodzi", () => {
     expect(readParams("?godzina=23.99", random).hour).toBe(23.99);
   });
