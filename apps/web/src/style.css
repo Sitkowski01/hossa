@@ -95,3 +95,166 @@ body {
   outline: 2px solid var(--wzrost);
   outline-offset: 2px;
 }
+
+/* --- wspolne dla paneli nad makieta --- */
+
+:root {
+  --szklo: rgb(11 18 32 / 86%);
+  --krawedz: #22324a;
+  --wycena: #e0b44c;
+  --panel: min(440px, 42vw);
+}
+
+.notowania,
+.wiadomosci,
+.panel {
+  background: var(--szklo);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--krawedz);
+  border-radius: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-kierunek="wzrost"] {
+  color: var(--wzrost);
+}
+
+[data-kierunek="spadek"] {
+  color: var(--spadek);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--wzrost);
+  outline-offset: 2px;
+}
+
+/* --- tablica notowan --- */
+
+.notowania {
+  position: fixed;
+  top: 68px;
+  left: 12px;
+  display: grid;
+  width: 236px;
+  padding: 6px;
+}
+
+.notowania button {
+  display: grid;
+  grid-template-columns: 3.2em 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tekst);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notowania button:hover {
+  background: rgb(147 164 187 / 10%);
+}
+
+.notowania button[aria-pressed="true"] {
+  border-color: var(--krawedz);
+  background: #16233a;
+}
+
+.notowanie-ticker {
+  font-weight: 600;
+  color: var(--tekst);
+}
+
+.notowanie-cena {
+  color: var(--tekst);
+  text-align: right;
+}
+
+.notowanie-zmiana {
+  min-width: 4.6em;
+  text-align: right;
+  font-size: 0.85rem;
+}
+
+/* --- pasek wiadomosci --- */
+
+.wiadomosci {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(760px, calc(100% - 24px));
+  padding: 6px 8px 6px 14px;
+}
+
+.wiadomosci[hidden] {
+  display: none;
+}
+
+body[data-panel] .wiadomosci {
+  max-width: min(760px, calc(100% - var(--panel) - 48px));
+}
+
+.wiadomosci-etykieta {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--przygaszony);
+}
+
+.wiadomosci-tekst {
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tekst);
+  font: inherit;
+  font-size: 0.92rem;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wiadomosci-tekst[data-kierunek] {
+  color: var(--tekst);
+}
+
+.wiadomosci-tekst::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--przygaszony);
+  vertical-align: 1px;
+}
+
+.wiadomosci-tekst[data-kierunek="wzrost"]::before {
+  background: var(--wzrost);
+}
+
+.wiadomosci-tekst[data-kierunek="spadek"]::before {
+  background: var(--spadek);
+}
+
+.wiadomosci-tekst:hover:not(:disabled) {
+  background: rgb(147 164 187 / 10%);
+}
+
+.wiadomosci-tekst:disabled {
+  cursor: default;
+}
