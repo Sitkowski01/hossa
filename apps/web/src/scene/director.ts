@@ -1,0 +1,114 @@
+import type { Ticker } from "@hossa/economy";
+import * as THREE from "three";
+import { FLIGHT_MS, flightAt, focusPose, type Pose, type Vec3 } from "../world/flight.js";
+import type { Model } from "./model.js";
+import type { Stage } from "./stage.js";
+
+export interface Director {
+  /** Makieta przychodzi po starcie; przelot zamowiony wczesniej rusza, gdy juz jest. */
+  useModel(model: Model): void;
+  /** Przelot do budynku spolki; pierwszy zapamietuje ujecie, do ktorego wraca `release`. */
+  focus(ticker: Ticker): void;
+  release(): void;
+  /** Ile ekranu zaslania panel: obraz przesuwa sie tak, zeby budynek byl w srodku reszty. */
+  setInset(right: number, bottom: number): void;
+  update(now: number): void;
+}
+
+const vec = (v: THREE.Vector3): Vec3 => [v.x, v.y, v.z];
+/** Jak szybko obraz dogania przesuniecie pod panel (na sekunde). */
+const SHIFT_RATE = 6;
+
+/**
+ * Kamera w trybie panelu: podlatuje do kliknietego zakladu, patrzy na niego z tego samego
+ * kierunku co wczesniej i pozwala go obracac (OrbitControls kreci sie wokol budynku).
+ * Po zamknieciu panelu wraca do ujecia sprzed pierwszego przelotu.
+ */
+export function createDirector(stage: Stage): Director {
+  const { camera, controls } = stage;
+  const poses = new Map<Ticker, { center: Vec3; distance: number }>();
+  let model: Model | undefined;
+  let wanted: Ticker | null = null;
+  const frame = (t: Ticker, m: Model) => {
+    let p = poses.get(t);
+    if (!p) {
+      // srodek i wielkosc glownego budynku spolki (bez falochronu czy dalekich zwalow)
+      const sphere = new THREE.Box3().setFromObject(m.node(t)).getBoundingSphere(new THREE.Sphere());
+      const distance = THREE.MathUtils.clamp(sphere.radius * 3.4, 110, 240);
+      p = { center: [sphere.center.x, Math.min(sphere.center.y, 12), sphere.center.z], distance };
+      poses.set(t, p);
+    }
+    return p;
+  };
+  const now = (): Pose => ({ position: vec(camera.position), target: vec(controls.target) });
+
+  let flight: { from: Pose; to: Pose; start: number } | null = null;
+  let home: Pose | null = null;
+  // ujecie domowe znika dopiero po wyladowaniu: panel otwarty w trakcie powrotu nie zapamieta
+  // jako domu punktu w polowie drogi
+  let returning = false;
+  const fly = (to: Pose) => {
+    flight = { from: now(), to, start: performance.now() };
+    controls.enabled = false;
+  };
+
+  const inset = { right: 0, bottom: 0 };
+  const shift = { x: 0, y: 0 };
+  let last = performance.now();
+  let applied = "";
+
+  const go = (ticker: Ticker, m: Model) => {
+    returning = false;
+    home ??= now();
+    const { center, distance } = frame(ticker, m);
+    fly(focusPose(now(), center, distance));
+  };
+
+  return {
+    useModel(m) {
+      model = m;
+      if (wanted) go(wanted, m);
+    },
+    focus(ticker) {
+      wanted = ticker;
+      if (model) go(ticker, model);
+    },
+    release() {
+      wanted = null;
+      if (!home) return;
+      fly(home);
+      returning = true;
+    },
+    setInset(right, bottom) {
+      inset.right = right;
+      inset.bottom = bottom;
+    },
+    update(time) {
+      if (flight) {
+        const p = flightAt(flight.from, flight.to, time - flight.start);
+        camera.position.set(...p.position);
+        controls.target.set(...p.target);
+        if (time - flight.start >= FLIGHT_MS) {
+          flight = null;
+          controls.enabled = true;
+          if (returning) home = null;
+          returning = false;
+        }
+      }
+      const dt = Math.min((time - last) / 1000, 0.1);
+      last = time;
+      const k = 1 - Math.exp(-SHIFT_RATE * dt);
+      shift.x += (inset.right / 2 - shift.x) * k;
+      shift.y += (inset.bottom / 2 - shift.y) * k;
+      const w = stage.renderer.domElement.clientWidth;
+      const h = stage.renderer.domElement.clientHeight;
+      // obie metody przeliczaja macierz rzutowania, wiec wolamy je tylko, gdy przesuniecie sie zmienilo
+      const centered = Math.abs(shift.x) < 0.5 && Math.abs(shift.y) < 0.5;
+      const key = centered ? "" : `${String(w)}|${String(h)}|${shift.x.toFixed(1)}|${shift.y.toFixed(1)}`;
+      if (key === applied) return;
+      applied = key;
+      if (centered) camera.clearViewOffset();
+      else camera.setViewOffset(w, h, shift.x, shift.y, w, h);
+    },
+  };
+}
