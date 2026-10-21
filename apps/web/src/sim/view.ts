@@ -2,9 +2,14 @@ import { COMPANIES, TECH, TICKERS, type DayReport, type News, type Stocks, type 
 import type { Session } from "@hossa/market";
 import { nextShipPhase, type ShipPhase } from "../world/traffic.js";
 import type { SimClock } from "./clock.js";
-import type { CompanyView, Dispatch, Headline, Incident, Route, Snapshot, Yards } from "./protocol.js";
+import { BARS_SHOWN, type CompanyView, type Detail, type Dispatch, type Headline, type Incident, type Route, type Snapshot, type Yards } from "./protocol.js";
 
 const NEWS_KEPT = 8;
+const DEPTH_LEVELS = 8;
+const TAPE_SHOWN = 12;
+const COMPANY_NEWS = 5;
+/** Ile ostatnich wiadomosci sesji przeszukuje panel spolki (kilka tygodni gry). */
+export const NEWS_SCANNED = 200;
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 /** Port mierzy place ladunkiem jednego statku (wysylki z kilku dni). */
 const PORT_STEEL = TECH.truckSteel * TECH.shipEvery;
@@ -41,6 +46,42 @@ const affected = (impacts: Partial<Record<Ticker, number>>): Ticker[] =>
 
 const headline = (n: News, id: number): Headline => ({ id, day: n.day, text: n.headline, tone: tone(n.impacts), tickers: affected(n.impacts) });
 
+/** Panel jednej spolki: swiece z krokow, arkusz, tasma, fundamenty z ksiag i jej wiadomosci. */
+export function detail(session: Session, t: Ticker): Detail {
+  const market = session.markets[t];
+  const economy = session.economy;
+  const info = COMPANIES[t];
+  const earningsYear = economy.earningsRunRate(t);
+  const marketCap = market.last * info.shares;
+  const news: Headline[] = [];
+  // od konca i tylko ostatnie NEWS_SCANNED: spolka rzadko w wiadomosciach nie moze kazac przegladac
+  // calej, wciaz rosnacej historii sesji 10 razy na sekunde
+  const oldest = Math.max(0, session.news.length - NEWS_SCANNED);
+  for (let i = session.news.length - 1; i >= oldest && news.length < COMPANY_NEWS; i--) {
+    const n = session.news[i] as News;
+    // wydzwiek dla tej spolki, nie sredni: strajk w kopalni to dla niej katastrofa, dla fabryki drobiazg
+    const impact = n.impacts[t];
+    if (impact !== undefined) news.unshift({ ...headline(n, i), tone: impact });
+  }
+  return {
+    ticker: t,
+    bars: market.bars.slice(-BARS_SHOWN),
+    bids: market.book.depth("BUY", DEPTH_LEVELS).map(({ price, quantity }) => ({ price, quantity })),
+    asks: market.book.depth("SELL", DEPTH_LEVELS).map(({ price, quantity }) => ({ price, quantity })),
+    tape: market.tape.slice(-TAPE_SHOWN),
+    fundamentals: {
+      cash: economy.ledger.balance(t),
+      debt: info.debt,
+      earningsYear,
+      lastQuarter: economy.lastQuarterProfit[t],
+      marketCap,
+      pe: earningsYear > 0 ? marketCap / earningsYear : null,
+      shares: info.shares,
+    },
+    news,
+  };
+}
+
 /**
  * Patrzy na sesje i sklada migawke dla sceny. Pamieta tylko to, czego sesja nie trzyma:
  * faze statku z poprzedniego dnia (zeby statek nie przeskakiwal).
@@ -51,7 +92,7 @@ export class Observer {
 
   constructor(private readonly seed: number) {}
 
-  snapshot(session: Session, clock: SimClock): Snapshot {
+  snapshot(session: Session, clock: SimClock, focus: Ticker | null = null): Snapshot {
     const economy = session.economy;
     // gospodarka po rozruchu zawsze ma raport (ostatni dzien rozruchu albo dzisiejszy)
     const report = economy.last as DayReport;
@@ -100,6 +141,7 @@ export class Observer {
       ship: this.ship,
       incidents,
       news,
+      ...(focus ? { detail: detail(session, focus) } : {}),
     };
   }
 }

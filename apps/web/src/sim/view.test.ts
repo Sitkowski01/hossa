@@ -1,10 +1,10 @@
-import { TECH, TICKERS, type EconomicEvent } from "@hossa/economy";
+import { COMPANIES, TECH, TICKERS, type EconomicEvent, type News } from "@hossa/economy";
 import { Session } from "@hossa/market";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { ShipPhase } from "../world/traffic.js";
 import { SimClock } from "./clock.js";
-import type { Snapshot } from "./protocol.js";
-import { Observer, loadingDay, yards } from "./view.js";
+import { BARS_SHOWN, type Snapshot } from "./protocol.js";
+import { NEWS_SCANNED, Observer, detail, loadingDay, yards } from "./view.js";
 
 /** Sesja jak w workerze: zegar idzie krokami, po kazdym kroku powstaje migawka. */
 function run(seed: number, days: number, events: Record<number, EconomicEvent> = {}): Snapshot[] {
@@ -145,7 +145,10 @@ describe("Observer — zdarzenia na makiecie", () => {
   it("wydzwiek wiadomosci to srednia wplywu na wszystkie spolki, ktorych dotyczy", () => {
     const shots = run(7, 2, { 1: { kind: "STRAJK", ticker: "RUD", days: 5 } });
     // kopalnia -0,8, huta -0,3, fabryka -0,1
-    expect((shots.at(-1) as Snapshot).news.find((n) => n.text.includes("Strajk"))?.tone).toBeCloseTo(-0.4);
+    const strike = (shots.at(-1) as Snapshot).news.find((n) => n.text.includes("Strajk"));
+    expect(strike?.tone).toBeCloseTo(-0.4);
+    // gospodarka wpisuje kopalnie na koniec, a pasek ma otworzyc ja, nie fabryke
+    expect(strike?.tickers).toEqual(["RUD", "STW", "MTK"]);
   });
 
   it("nowe zloze dziala na stale i nie wisi na liscie zdarzen z liczba dni", () => {
@@ -192,5 +195,102 @@ describe("yards", () => {
     expect(yards({ mineOre: 0, millOre: TECH.millOreYard / 4, millSteel: 0, factorySteel: 0, backlog: 0, portSteel: 0, portMachines: 0 }, 0).millOre).toBe(0.25);
     const y = yards({ mineOre: TECH.mineYard / 2, millOre: TECH.millOreYard * 2, millSteel: 0, factorySteel: 0, backlog: 0, portSteel: 700, portMachines: 100 }, -0.5);
     expect(y).toEqual({ mine: 0.5, millOre: 1, factory: 0, portSteel: 700 / 3500, portMachines: 100 / 1000 });
+  });
+});
+
+describe("detail — panel spolki", () => {
+  it("bez otwartego panelu migawka nie niesie szczegolow, z panelem niesie szczegoly tej spolki", () => {
+    const { session } = play(42, 2);
+    const observer = new Observer(42);
+    expect(observer.snapshot(session, new SimClock(4)).detail).toBeUndefined();
+    expect(observer.snapshot(session, new SimClock(4), "STW").detail?.ticker).toBe("STW");
+  });
+
+  it("swiece to ostatnie kroki rynku, a arkusz jest posortowany od najlepszej ceny", () => {
+    const { session } = play(42, 20);
+    const d = detail(session, "RUD");
+    const market = session.markets.RUD;
+    expect(d.bars).toHaveLength(BARS_SHOWN);
+    expect(d.bars).toEqual(market.bars.slice(-BARS_SHOWN));
+    expect(d.bars.at(-1)?.day).toBe(20);
+    expect(d.bids.length).toBeGreaterThan(0);
+    expect(d.asks.length).toBeGreaterThan(0);
+    expect(d.bids.length).toBeLessThanOrEqual(8);
+    expect(d.asks.length).toBeLessThanOrEqual(8);
+    expect(d.bids[0]?.price).toBe(market.book.bestBid());
+    expect(d.asks[0]?.price).toBe(market.book.bestAsk());
+    for (let i = 1; i < d.bids.length; i++) expect(d.bids[i]?.price).toBeLessThan(d.bids[i - 1]?.price ?? 0);
+    for (let i = 1; i < d.asks.length; i++) expect(d.asks[i]?.price).toBeGreaterThan(d.asks[i - 1]?.price ?? 0);
+    expect(d.bids[0]).toEqual({ price: d.bids[0]?.price, quantity: market.book.depth("BUY", 1)[0]?.quantity });
+  });
+
+  it("tasma to 12 ostatnich transakcji", () => {
+    const { session } = play(42, 5);
+    const d = detail(session, "MTK");
+    expect(d.tape).toEqual(session.markets.MTK.tape.slice(-12));
+    expect(d.tape).toHaveLength(12);
+  });
+
+  it("fundamenty pochodza z ksiag gospodarki, a C/Z to kapitalizacja przez roczny zysk", () => {
+    const { session } = play(42, 3);
+    const f = detail(session, "KSZ").fundamentals;
+    const economy = session.economy;
+    expect(f.cash).toBe(economy.ledger.balance("KSZ"));
+    expect(f.debt).toBe(COMPANIES.KSZ.debt);
+    expect(f.shares).toBe(COMPANIES.KSZ.shares);
+    expect(f.earningsYear).toBe(economy.earningsRunRate("KSZ"));
+    expect(f.lastQuarter).toBe(economy.lastQuarterProfit.KSZ);
+    expect(f.marketCap).toBe(session.markets.KSZ.last * COMPANIES.KSZ.shares);
+    expect(f.pe).toBeCloseTo(f.marketCap / f.earningsYear);
+    expect(f.earningsYear).toBeGreaterThan(0);
+  });
+
+  it("spolka bez zysku nie ma C/Z", () => {
+    const { session } = play(42, 1);
+    const economy = session.economy as unknown as { earningsEma: Record<string, number> };
+    economy.earningsEma.STW = 0;
+    expect(detail(session, "STW").fundamentals.pe).toBeNull();
+    economy.earningsEma.STW = -100;
+    expect(detail(session, "STW").fundamentals.pe).toBeNull();
+  });
+
+  it("wiadomosci spolki to najwyzej 5 najnowszych, ktore jej dotycza, z numerami z dziennika", () => {
+    const strike: EconomicEvent = { kind: "STRAJK", ticker: "RUD", days: 1 };
+    const events = Object.fromEntries(Array.from({ length: 7 }, (_, d) => [d * 2 + 1, strike]));
+    const { session } = play(9, 15, { ...events, 2: { kind: "SZTORM", ticker: "BPT", days: 1 } });
+    const d = detail(session, "RUD");
+    expect(d.news).toHaveLength(5);
+    for (const n of d.news) expect(n.tickers).toContain("RUD");
+    expect(d.news.map((n) => n.id)).toEqual([...d.news.map((n) => n.id)].sort((a, b) => a - b));
+    const own = session.news.map((n, i) => ({ n, i })).filter(({ n }) => "RUD" in n.impacts);
+    expect(d.news.at(-1)?.id).toBe(own.at(-1)?.i);
+    expect(d.news[0]?.text).toBe(own.at(-5)?.n.headline);
+    // sztorm dotyczy portu, nie kopalni
+    expect(d.news.some((n) => n.text.includes("Sztorm"))).toBe(false);
+    expect(detail(session, "BPT").news.some((n) => n.tickers.includes("BPT"))).toBe(true);
+  });
+
+  it("szuka tylko w ostatnich NEWS_SCANNED wiadomosciach sesji", () => {
+    const { session } = play(7, 2, { 1: { kind: "STRAJK", ticker: "RUD", days: 5 } });
+    const filler: News = { day: 2, kind: "WYNIKI", headline: "Port bez zmian", impacts: { BPT: 0.1 }, weight: 0.1 };
+    const lastOwn = session.news.findLastIndex((n) => "RUD" in n.impacts);
+    // najnowsza wiadomosc o kopalni dokladnie na granicy okna: jeszcze widoczna
+    while (session.news.length - lastOwn < NEWS_SCANNED) session.news.push(filler);
+    expect(detail(session, "RUD").news.at(-1)?.id).toBe(lastOwn);
+    session.news.push(filler);
+    expect(detail(session, "RUD").news).toEqual([]);
+  });
+
+  it("wiadomosc w panelu ma wydzwiek dla tej spolki, a nie sredni", () => {
+    const { session } = play(7, 2, { 1: { kind: "STRAJK", ticker: "RUD", days: 5 } });
+    const strike = (t: "RUD" | "MTK") => detail(session, t).news.find((n) => n.text.includes("Strajk"));
+    // srednia dla kopalni, huty i fabryki to -0,4
+    expect(strike("RUD")?.tone).toBeCloseTo(-0.8);
+    expect(strike("MTK")?.tone).toBeCloseTo(-0.1);
+  });
+
+  it("nazwa spolki w migawce pochodzi z gospodarki", () => {
+    const shot = new Observer(1).snapshot(new Session({ seed: 1, stepsPerDay: 4 }), new SimClock(4));
+    for (const t of TICKERS) expect(shot.companies[t].name).toBe(COMPANIES[t].name);
   });
 });

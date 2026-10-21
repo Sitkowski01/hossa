@@ -1,3 +1,4 @@
+import type { Ticker } from "@hossa/economy";
 import { Session } from "@hossa/market";
 import { SimClock } from "./clock.js";
 import type { FromWorker, ToWorker } from "./protocol.js";
@@ -17,6 +18,8 @@ const port = self as unknown as {
 
 let running: { session: Session; clock: SimClock; observer: Observer } | undefined;
 let last = 0;
+/** Spolka otwarta w panelu — tylko dla niej worker liczy arkusz, swiece i fundamenty. */
+let focus: Ticker | null = null;
 
 function loop(): void {
   if (!running) return;
@@ -25,7 +28,7 @@ function loop(): void {
   clock.advance(now - last);
   last = now;
   while (session.step < clock.stepsDue) session.tick();
-  port.postMessage({ type: "snapshot", snapshot: observer.snapshot(session, clock) });
+  port.postMessage({ type: "snapshot", snapshot: observer.snapshot(session, clock, focus) });
 }
 
 port.onmessage = (e) => {
@@ -40,5 +43,8 @@ port.onmessage = (e) => {
     loop(); // czas do tej chwili liczy sie jeszcze w starym tempie
     running.clock.speed = msg.speed;
     loop(); // scena od razu dostaje nowe tempo, inaczej przez 100 ms ekstrapolowalaby po staremu
+  } else if (msg.type === "focus") {
+    focus = msg.ticker;
+    loop(); // panel nie czeka 100 ms na pierwsze dane
   }
 };
