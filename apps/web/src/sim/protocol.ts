@@ -9,9 +9,13 @@ import type { ShipPhase } from "../world/traffic.js";
 export const SPEEDS = [0, 1, 4, 16] as const;
 export type Speed = (typeof SPEEDS)[number];
 
+/** Swiece na wykresie panelu: trzy dni przy 20 krokach na dzien. Tyle wysyla worker i tyle miesci wykres. */
+export const BARS_SHOWN = 60;
+
 export type Route = "RUD-STW" | "STW-MTK" | "STW-BPT" | "MTK-BPT";
 
 export interface CompanyView {
+  readonly name: string;
   readonly price: number;
   /** Cena otwarcia dzisiejszej sesji. */
   readonly open: number;
@@ -49,6 +53,8 @@ export interface Headline {
   readonly text: string;
   /** Wydzwiek od -1 do 1 (srednia wplywu na spolki, ktorych dotyczy). */
   readonly tone: number;
+  /** Spolki, ktorych dotyczy, od najmocniej dotknietej. */
+  readonly tickers: readonly Ticker[];
 }
 
 export interface Snapshot {
@@ -70,11 +76,66 @@ export interface Snapshot {
   readonly ship: ShipPhase;
   readonly incidents: readonly Incident[];
   readonly news: readonly Headline[];
+  /** Szczegoly otwartej spolki; brak, gdy panel jest zamkniety. */
+  readonly detail?: Detail;
 }
 
-export type ToWorker = { readonly type: "start"; readonly seed: number; readonly speed: Speed } | { readonly type: "speed"; readonly speed: Speed };
+export type ToWorker =
+  | { readonly type: "start"; readonly seed: number; readonly speed: Speed }
+  | { readonly type: "speed"; readonly speed: Speed }
+  | { readonly type: "focus"; readonly ticker: Ticker | null };
 
 export interface FromWorker {
   readonly type: "snapshot";
   readonly snapshot: Snapshot;
+}
+
+/** Swieca jednego kroku gieldy; `day` pozwala zaznaczyc na wykresie poczatek dnia. */
+export interface Bar {
+  readonly day: number;
+  readonly open: number;
+  readonly high: number;
+  readonly low: number;
+  readonly close: number;
+  readonly volume: number;
+}
+
+export interface BookLevel {
+  readonly price: number;
+  readonly quantity: number;
+}
+
+export interface Print {
+  readonly seq: number;
+  readonly price: number;
+  readonly quantity: number;
+  /** Strona agresora: BUY = ktos kupil z oferty sprzedazy (transakcja w gore). */
+  readonly side: "BUY" | "SELL";
+}
+
+/** Fundamenty z ksiag gospodarki. Kwoty w groszach. */
+export interface Fundamentals {
+  readonly cash: number;
+  readonly debt: number;
+  /** Roczny zysk w obecnym tempie (srednia z ~30 dni razy 360). */
+  readonly earningsYear: number;
+  readonly lastQuarter: number;
+  readonly marketCap: number;
+  /** Cena do zysku; null, gdy spolka nie zarabia. */
+  readonly pe: number | null;
+  readonly shares: number;
+}
+
+/** Wszystko do panelu jednej spolki — liczone tylko dla tej, ktora uzytkownik otworzyl. */
+export interface Detail {
+  readonly ticker: Ticker;
+  readonly bars: readonly Bar[];
+  /** Najlepsze poziomy arkusza, od najlepszej ceny. */
+  readonly bids: readonly BookLevel[];
+  readonly asks: readonly BookLevel[];
+  /** Ostatnie transakcje, najnowsza na koncu. */
+  readonly tape: readonly Print[];
+  readonly fundamentals: Fundamentals;
+  /** Wiadomosci, ktore dotycza tej spolki, najnowsza na koncu. */
+  readonly news: readonly Headline[];
 }

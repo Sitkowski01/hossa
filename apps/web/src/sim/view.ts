@@ -1,4 +1,4 @@
-import { TECH, TICKERS, type DayReport, type Stocks, type Ticker } from "@hossa/economy";
+import { COMPANIES, TECH, TICKERS, type DayReport, type News, type Stocks, type Ticker } from "@hossa/economy";
 import type { Session } from "@hossa/market";
 import { nextShipPhase, type ShipPhase } from "../world/traffic.js";
 import type { SimClock } from "./clock.js";
@@ -35,6 +35,12 @@ const tone = (impacts: Partial<Record<Ticker, number>>): number => {
   return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length;
 };
 
+/** Spolki z wiadomosci od najmocniej dotknietej — pasek wiadomosci otwiera pierwsza. */
+const affected = (impacts: Partial<Record<Ticker, number>>): Ticker[] =>
+  (Object.entries(impacts) as [Ticker, number][]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).map(([t]) => t);
+
+const headline = (n: News, id: number): Headline => ({ id, day: n.day, text: n.headline, tone: tone(n.impacts), tickers: affected(n.impacts) });
+
 /**
  * Patrzy na sesje i sklada migawke dla sceny. Pamieta tylko to, czego sesja nie trzyma:
  * faze statku z poprzedniego dnia (zeby statek nie przeskakiwal).
@@ -68,7 +74,7 @@ export class Observer {
     const companies = {} as Record<Ticker, CompanyView>;
     for (const t of TICKERS) {
       const market = session.markets[t];
-      companies[t] = { price: market.last, open: market.candles.at(-1)?.open ?? market.last, fair: session.fairValue(t), output: clamp01(output[t]) };
+      companies[t] = { name: COMPANIES[t].name, price: market.last, open: market.candles.at(-1)?.open ?? market.last, fair: session.fairValue(t), output: clamp01(output[t]) };
     }
     // raport jest z dzisiaj, wiec jego wysylki to dzisiejsze wyjazdy
     const dispatches: Dispatch[] = report.dispatched.map((s) => ({ route: `${s.from}-${s.to}` as Route, good: s.good, quantity: s.quantity }));
@@ -77,7 +83,7 @@ export class Observer {
       .filter((e) => Number.isFinite(e.until))
       .map((e) => ({ kind: e.kind, ...(e.ticker ? { ticker: e.ticker } : {}), daysLeft: e.until - day }));
     const first = Math.max(0, session.news.length - NEWS_KEPT);
-    const news: Headline[] = session.news.slice(first).map((n, i) => ({ id: first + i, day: n.day, text: n.headline, tone: tone(n.impacts) }));
+    const news: Headline[] = session.news.slice(first).map((n, i) => headline(n, first + i));
     return {
       seed: this.seed,
       day,
