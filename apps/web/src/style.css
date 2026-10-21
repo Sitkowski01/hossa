@@ -513,3 +513,73 @@ body[data-panel] .wiadomosci {
   color: var(--przygaszony);
 }
 
+/* --- telefon: notowania w pasku nad wiadomosciami, panel wysuwany od dolu --- */
+
+@media (max-width: 720px) {
+  .notowania {
+    top: auto;
+    bottom: 64px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    width: auto;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .notowania button {
+    flex: none;
+    grid-template-columns: auto;
+    gap: 0;
+    min-width: 76px;
+    min-height: 44px;
+    text-align: center;
+  }
+
+  .notowanie-cena,
+  .notowanie-zmiana {
+    min-width: 0;
+    text-align: center;
+    font-size: 0.8rem;
+  }
+
+  .wiadomosci-etykieta {
+    display: none;
+  }
+
+  .wiadomosci {
+    right: 12px;
+    padding-left: 6px;
+  }
+
+  .panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 64vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+    animation-name: wjazd-z-dolu;
+  }
+
+  body[data-panel] .notowania,
+  body[data-panel] .wiadomosci {
+    display: none;
+  }
+
+  .panel-wykres {
+    height: 170px;
+  }
+
+  .panel-kolumny {
+    gap: 10px;
+  }
+}
+
+.tasma li.pusto {
+  display: block;
+  color: var(--przygaszony);
+}
