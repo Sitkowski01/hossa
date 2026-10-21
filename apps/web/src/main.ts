@@ -1,6 +1,9 @@
+import type { Ticker } from "@hossa/economy";
 import type { FromWorker, Snapshot, ToWorker } from "./sim/protocol.js";
 import { dayFraction, extrapolate } from "./sim/clock.js";
+import { createDirector } from "./scene/director.js";
 import { loadModel } from "./scene/model.js";
+import { createPicker, onPick } from "./scene/picking.js";
 import { createPickets } from "./scene/pickets.js";
 import { createProps } from "./scene/props.js";
 import { createRain } from "./scene/rain.js";
@@ -10,10 +13,13 @@ import { createStage } from "./scene/stage.js";
 import { createTickers } from "./scene/tickers.js";
 import { createTrucks } from "./scene/trucks.js";
 import { createHud } from "./ui/hud.js";
+import { createNewsBar } from "./ui/news.js";
+import { createPanel } from "./ui/panel.js";
+import { createQuotes } from "./ui/quotes.js";
 import { daylight, hourOf } from "./world/daylight.js";
 import { readParams } from "./world/params.js";
 
-const { seed, speed, hour: fixedHour, camera: view } = readParams(location.search);
+const { seed, speed, hour: fixedHour, camera: view, company } = readParams(location.search);
 
 const canvas = document.getElementById("scena") as HTMLCanvasElement;
 const stage = createStage(canvas);
@@ -30,14 +36,63 @@ const worker = new Worker(new URL("./sim/worker.ts", import.meta.url), { type: "
 const send = (msg: ToWorker) => {
   worker.postMessage(msg);
 };
+const hud = createHud((s) => {
+  send({ type: "speed", speed: s });
+});
+
+// panel spolki: klik w budynek, tabliczke, notowanie albo wiadomosc
+const director = createDirector(stage);
+let opener: HTMLElement | null = null;
+/**
+ * `from` to przycisk, ktorym otwarto panel — po zamknieciu (Escape, ×) wraca do niego fokus.
+ * Nie bierzemy document.activeElement: Safari nie daje fokusu kliknietemu przyciskowi.
+ * Zamkniecie kliknieciem w scene fokusu nie przenosi — uzytkownik jest wtedy przy makiecie.
+ */
+const select = (ticker: Ticker | null, from: HTMLElement | null = null) => {
+  if (ticker === panel.ticker) return;
+  if (!ticker) {
+    panel.close();
+    director.release();
+    director.setInset(0, 0);
+    send({ type: "focus", ticker: null });
+    if (from !== canvas) opener?.focus();
+    opener = null;
+    return;
+  }
+  if (!panel.ticker) opener = from === canvas ? null : from;
+  panel.open(ticker);
+  send({ type: "focus", ticker });
+  director.focus(ticker);
+  if (latest) quotes.update(latest, ticker);
+};
+const panel = createPanel(() => {
+  select(null);
+});
+const quotes = createQuotes(select);
+const newsBar = createNewsBar(select);
+// panel zaslania prawa strone (komputer) albo dol ekranu (telefon) — scena przesuwa obraz o tyle
+const fitInset = () => {
+  if (panel.element.hidden) return;
+  // offsetLeft/Top to miejsce z ukladu strony, bez transformacji: animacja wjazdu ich nie przesuwa
+  // (getBoundingClientRect zmierzylby panel w polowie drogi i obraz zostalby przesuniety za malo)
+  const { offsetLeft: left, offsetTop: top } = panel.element;
+  const bottomSheet = left < 1;
+  director.setInset(bottomSheet ? 0 : window.innerWidth - left, bottomSheet ? window.innerHeight - top : 0);
+};
+new ResizeObserver(fitInset).observe(panel.element);
+window.addEventListener("resize", fitInset);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && panel.ticker) select(null);
+});
+
 worker.onmessage = (e: MessageEvent<FromWorker>) => {
   latest = e.data.snapshot;
   receivedAt = performance.now();
   document.body.dataset.dzien = String(latest.day);
+  quotes.update(latest, panel.ticker);
+  newsBar.update(latest);
+  panel.update(latest);
 };
-const hud = createHud((s) => {
-  send({ type: "speed", speed: s });
-});
 
 // symulacja rusza od razu, rownolegle z pobieraniem makiety — klikniete w tym czasie tempo nie ginie
 send({ type: "start", seed, speed });
@@ -53,6 +108,12 @@ const props = createProps(model, stage.scene);
 const tickers = createTickers(model, stage.scene);
 const pickets = createPickets(model, stage.scene);
 const rain = createRain(stage.scene);
+director.useModel(model);
+onPick(canvas, createPicker(model, stage.camera, canvas, tickers.signs), (t) => {
+  // klik w puste miejsce makiety zamyka panel
+  select(t, canvas);
+});
+if (company) select(company);
 const chimneys = [
   { smoke: createSmoke(stage.scene, model.anchor("STW_dym_1"), stage.renderer.getPixelRatio()), rate: (s: Snapshot) => s.companies.STW.output },
   { smoke: createSmoke(stage.scene, model.anchor("STW_dym_2"), stage.renderer.getPixelRatio()), rate: (s: Snapshot) => s.companies.STW.output },
@@ -81,6 +142,7 @@ function frame(now: number): void {
     for (const c of chimneys) c.smoke.update(c.rate(snap), simDt, light.day);
     hud.update(snap, hour);
   }
+  director.update(now);
   stage.render();
 }
 requestAnimationFrame(frame);
