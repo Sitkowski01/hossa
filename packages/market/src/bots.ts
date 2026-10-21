@@ -133,7 +133,11 @@ export class Momentum extends Bot {
   }
 }
 
-/** Szum: drobne zlecenia blisko ceny, czasem po kazdej cenie. Stare zlecenia po ~2 dniach anuluje. */
+/**
+ * Szum: drobne zlecenia blisko ceny, czesc tuz za srodkiem (przecina spread animatora), a w ok. 35%
+ * krokow zlecenie po kazdej cenie. Daje rynkowi transakcje w kazdym kroku — bez tego swieca z jednego
+ * kroku bylaby zwykle plaska. Stare zlecenia po ~2 dniach anuluje.
+ */
 export class NoiseTrader extends Bot {
   readonly kind = "losowy";
   private readonly placed = new Map<number, number>();
@@ -150,11 +154,11 @@ export class NoiseTrader extends Bot {
     }
     const side = rng.chance(0.5) ? "BUY" : "SELL";
     if (rng.chance(0.6)) {
-      const offset = rng.int(0, 8) * TICK * (side === "BUY" ? -1 : 1);
+      const offset = rng.int(-3, 8) * TICK * (side === "BUY" ? -1 : 1);
       const events = market.submit(this, side, "LIMIT", market.mid() + offset, rng.int(5, 60));
       for (const e of events) if (e.kind === "RESTED") this.placed.set(e.orderId, step);
     }
-    if (rng.chance(0.1)) market.submit(this, side, "MARKET", 0, rng.int(5, 40));
+    if (rng.chance(0.35)) market.submit(this, side, "MARKET", 0, rng.int(5, 40));
   }
 }
 

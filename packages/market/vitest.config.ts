@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: { alias: { "@hossa/engine": src("engine"), "@hossa/economy": src("economy") } },
   test: {
     include: ["src/**/*.test.ts"],
+    // testy sesji symuluja setki dni; pod instrumentacja Strykera trwaja kilka razy dluzej
+    testTimeout: 30_000,
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],

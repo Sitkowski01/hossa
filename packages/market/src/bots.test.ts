@@ -1,7 +1,7 @@
 import { Rng, type News } from "@hossa/economy";
 import { describe, expect, it } from "vitest";
 import { Fundamental, MarketMaker, Momentum, NewsTrader, NoiseTrader, crowdFor, type BotContext } from "./bots.js";
-import { OrderIds, SymbolMarket, type Trader } from "./symbol-market.js";
+import { OrderIds, SymbolMarket, TICK, roundTick, type Trader } from "./symbol-market.js";
 
 const ctx = (market: SymbolMarket, fair = 3000, step = 0): BotContext => ({ market, step, stepsPerDay: 20, fair: () => fair });
 const rng = (seed = 1) => new Rng(seed);
@@ -153,9 +153,19 @@ describe("Momentum and NoiseTrader", () => {
   it("noise places small orders near the price and cancels old ones", () => {
     const m = new SymbolMarket("RUD", 3000, new OrderIds());
     const bot = new NoiseTrader("no", rng(4));
-    for (let step = 0; step < 30; step++) bot.act(ctx(m, 3000, step));
+    // cena zlecenia wzgledem srodka arkusza w chwili zlozenia: kupno od 3 tickow ponad srodkiem
+    // do 8 ponizej (sprzedaz lustrzanie), czyli czasem przecina spread
+    const offsets: number[] = [];
+    const submit = m.submit.bind(m);
+    m.submit = (trader, side, type, price, quantity) => {
+      if (type === "LIMIT") offsets.push(((roundTick(price) - roundTick(m.mid())) / TICK) * (side === "BUY" ? -1 : 1));
+      return submit(trader, side, type, price, quantity);
+    };
+    for (let step = 0; step < 60; step++) bot.act(ctx(m, 3000, step));
     expect(bot.resting.size).toBeGreaterThan(5);
-    for (const o of m.book.snapshot().orders) expect(Math.abs(o.price - 3000)).toBeLessThanOrEqual(45);
+    expect(Math.min(...offsets)).toBeGreaterThanOrEqual(-3);
+    expect(Math.max(...offsets)).toBeLessThanOrEqual(8);
+    expect(offsets.some((o) => o < 0)).toBe(true);
     bot.act(ctx(m, 3000, 100));
     expect(bot.resting.size).toBeLessThanOrEqual(1);
   });
